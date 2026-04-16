@@ -49,41 +49,42 @@ const haptic = (pattern = 10) => { try { navigator.vibrate(pattern); } catch (_)
 
 const makeStyles = (t) => ({
   card: (extra = {}) => ({
-    background: t.surfaceHigh, borderRadius: 16, padding: "16px 18px", marginBottom: 14,
-    border: `1px solid ${t.border}`, boxShadow: "0 2px 16px rgba(0,0,0,0.22)",
+    background: t.surfaceHigh, borderRadius: 18, padding: "18px 20px", marginBottom: 14,
+    border: `1px solid ${t.border}`, boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
     ...extra
   }),
   inputStyle: (extra = {}) => ({
-    background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 10,
-    color: t.text, padding: "10px 12px", fontSize: 15, outline: "none", width: 120,
-    transition: "border-color 0.2s",
+    background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12,
+    color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: 120,
+    transition: "border-color 0.2s", WebkitAppearance: "none",
     ...extra
   }),
   iconBtn: (color) => ({
     background: "transparent", border: "none", cursor: "pointer",
-    color: color || t.textMuted, padding: 5, display: "flex", alignItems: "center",
-    borderRadius: 8, transition: "opacity 0.15s",
+    color: color || t.textMuted, padding: 8, display: "flex", alignItems: "center",
+    borderRadius: 10, transition: "opacity 0.15s",
   }),
   ghostBtn: (extra = {}) => ({
-    display: "flex", alignItems: "center", gap: 6, background: "transparent",
-    border: `1.5px dashed ${t.border}`, borderRadius: 10, color: t.textMuted,
-    padding: "8px 14px", fontSize: 13, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "transparent",
+    border: `1.5px dashed ${t.border}`, borderRadius: 14, color: t.textMuted,
+    padding: "13px 16px", fontSize: 14, cursor: "pointer", minHeight: 48,
     transition: "border-color 0.2s, color 0.2s",
     ...extra
   }),
   solidBtn: (extra = {}) => ({
     background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
-    color: "#ffffff", border: "none", borderRadius: 12, padding: "11px 22px",
+    color: "#ffffff", border: "none", borderRadius: 14, padding: "15px 24px",
     fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-    letterSpacing: 0.3, fontSize: 15, boxShadow: `0 4px 16px ${accentGlow}`,
+    letterSpacing: 0.3, fontSize: 16, boxShadow: `0 4px 20px ${accentGlow}`,
     transition: "opacity 0.2s, transform 0.15s", touchAction: "manipulation",
+    minHeight: 48,
     ...extra
   }),
   select: (extra = {}) => ({
     background: t.surfaceHigh, color: accent, border: `1px solid ${accent}55`,
-    borderRadius: 10, padding: "7px 28px 7px 11px", fontSize: 12, fontWeight: 700,
+    borderRadius: 12, padding: "10px 32px 10px 14px", fontSize: 13, fontWeight: 700,
     cursor: "pointer", outline: "none", appearance: "none", WebkitAppearance: "none",
-    letterSpacing: 0.3,
+    letterSpacing: 0.3, minHeight: 44,
     ...extra
   }),
 });
@@ -116,7 +117,7 @@ const makeStyles = (t) => ({
 // v1.2.1  2026-04-08  Profile: Security Settings added — change email and password with verification flow
 // v1.2.2  2026-04-08  Fixed critical bug: useStorage useEffect was resetting user data on profile edits
 // v2.0.0  2026-04-16  Rebranded to Rep Set. Steel Blue colour system. Visual overhaul. 1RM estimator, exercise notes, plate calculator.
-const APP_VERSION = "0.3.4";
+const APP_VERSION = "0.3.5";
 const BUILD_DATE  = "2026-04-16";
 
 const getUserKey = (u) => `gymtrack-data-${u}`;
@@ -744,9 +745,9 @@ function SetRow({ set, index, onChange, onRemove }) {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
       <span style={{ width: 22, color: t.textMuted, fontSize: 13, textAlign: "center" }}>{index + 1}</span>
-      <input type="number" inputMode="decimal" placeholder="lbs" value={set.weight} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 76 })} />
+      <input type="number" inputMode="decimal" placeholder="lbs" value={set.weight} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 88 })} />
       <span style={{ color: t.textMuted, fontSize: 13 }}>×</span>
-      <input type="number" inputMode="numeric" placeholder="reps" value={set.reps} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 68 })} />
+      <input type="number" inputMode="numeric" placeholder="reps" value={set.reps} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 80 })} />
       <button onClick={onRemove} style={S.iconBtn("#ff5b5b")}><Icon name="x" size={14} /></button>
     </div>
   );
@@ -779,7 +780,7 @@ function ExerciseBlock({ exercise, onChange, onRemove }) {
         onChange={e => onChange({ ...exercise, note: e.target.value })}
         placeholder="Notes (e.g. felt tight, increase next time…)"
         rows={1}
-        style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 9, color: t.text, padding: "8px 10px", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.5 }}
+        style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "12px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }}
         onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
       />
     </div>
@@ -916,8 +917,8 @@ function SecuritySettings({ authedUser }) {
   const [secMsg, setSecMsg] = useState(null);
   const [secVerify, setSecVerify] = useState(false);
 
-  const pField = { background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 9, color: t.text, padding: "10px 13px", fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 0 };
-  const lbl = { fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5, display: "block" };
+  const pField = { background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 0, WebkitAppearance: "none" };
+  const lbl = { fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, display: "block", fontWeight: 700 };
 
   const pwRules = [
     { label: "8+ characters", ok: newPw.length >= 8 },
@@ -1017,7 +1018,7 @@ function SecuritySettings({ authedUser }) {
               </div>
               <label style={lbl}>New Email Address</label>
               <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setSecMsg(null); }} placeholder="new@email.com" style={{ ...pField, marginBottom: 12 }} />
-              <button onClick={handleEmailChange} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 9, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
+              <button onClick={handleEmailChange} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 12, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
                 Update Email
               </button>
             </div>
@@ -1039,7 +1040,7 @@ function SecuritySettings({ authedUser }) {
               </div>
               <label style={lbl}>Confirm New Password</label>
               <input type="password" value={confirmPw} onChange={e => { setConfirmPw(e.target.value); setSecMsg(null); }} placeholder="Confirm new password" style={{ ...pField, marginBottom: 12 }} />
-              <button onClick={handlePasswordChange} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 9, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
+              <button onClick={handlePasswordChange} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 12, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
                 Update Password
               </button>
             </div>
@@ -1671,7 +1672,7 @@ export default function App() {
     const active = view === v;
     return (
       <button onClick={() => { if (v === "log" && !workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView(v); }}
-        style={{ flex: 1, background: "transparent", border: "none", borderTop: active ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: active ? accent : t.textMuted, padding: "11px 0 9px", transition: "color 0.15s", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
+        style={{ flex: 1, background: "transparent", border: "none", borderTop: active ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: active ? accent : t.textMuted, padding: "12px 0 10px", transition: "color 0.15s", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
         <div style={{ transition: "transform 0.15s", transform: active ? "scale(1.1)" : "scale(1)" }}>
           <Icon name={icon} size={21} />
         </div>
@@ -1697,9 +1698,9 @@ export default function App() {
           { label: "Exercises", value: [...new Set(data.workouts.flatMap(w => w.exercises.map(e => e.name)))].length, icon: "📋", color: "#5bb85b" },
         ];
         return (
-          <div style={{ padding: "48px 20px 20px" }}>
+          <div style={{ padding: "52px 20px 24px" }}>
             {/* Logo */}
-            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1, marginBottom: 6 }}>REP<span style={{ color: accent }}>SET</span></div>
+            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 2, lineHeight: 1, marginBottom: 8 }}>REP<span style={{ color: accent }}>SET</span></div>
             {/* Header */}
             <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
@@ -1720,24 +1721,24 @@ export default function App() {
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
               {statsRow.map(s => (
-                <div key={s.label} style={{ background: t.surfaceHigh, borderRadius: 16, padding: "16px 8px 14px", textAlign: "center", border: `1px solid ${t.border}`, borderTop: `2px solid ${s.color}`, boxShadow: `0 4px 20px rgba(0,0,0,0.25)` }}>
+                <div key={s.label} style={{ background: t.surfaceHigh, borderRadius: 18, padding: "20px 8px 16px", textAlign: "center", border: `1px solid ${t.border}`, borderTop: `3px solid ${s.color}`, boxShadow: `0 4px 24px rgba(0,0,0,0.20)` }}>
                   <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
-                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, color: s.color, lineHeight: 1 }}>{s.value}</div>
                   <div style={{ fontSize: 10, color: t.textMuted, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>{s.label}</div>
                 </div>
               ))}
             </div>
             {/* CTA */}
-            <button onClick={startWorkout} style={{ ...S.solidBtn(), width: "100%", padding: "18px", fontSize: 18, borderRadius: 16, marginBottom: 24, boxShadow: `0 6px 24px ${accentGlow}`, letterSpacing: 1 }}>+ Start Workout</button>
+            <button onClick={startWorkout} style={{ ...S.solidBtn(), width: "100%", padding: "20px", fontSize: 19, borderRadius: 16, marginBottom: 28, boxShadow: `0 8px 32px ${accentGlow}`, letterSpacing: 1.2 }}>+ Start Workout</button>
             {/* Recent sessions */}
             {data.workouts.length > 0 && (
               <>
-                <div style={{ color: t.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 12, fontWeight: 700 }}>Recent Sessions</div>
+                <div style={{ color: t.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14, fontWeight: 700, paddingLeft: 2 }}>Recent Sessions</div>
                 {data.workouts.slice(0, 5).map((w, i) => {
                   const labels = w.labels || (w.label ? [w.label] : []);
                   const labelCfgs = labels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
                   return (
-                    <div key={i} style={{ ...S.card(), display: "flex", alignItems: "center", gap: 12, padding: "13px 16px" }}>
+                    <div key={i} style={{ ...S.card(), display: "flex", alignItems: "center", gap: 14, padding: "15px 18px" }}>
                       <div style={{ width: 42, height: 42, borderRadius: 12, background: labelCfgs[0] ? labelCfgs[0].bg : `${accent}15`, border: `1px solid ${labelCfgs[0] ? labelCfgs[0].border : accent + "30"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
                         {labelCfgs[0] ? labelCfgs[0].emoji : "🏋️"}
                       </div>
@@ -1764,7 +1765,7 @@ export default function App() {
 
       {/* ── LOG ──────────────────────────── */}
       {view === "log" && (
-        <div style={{ padding: "24px 20px 20px" }}>
+        <div style={{ padding: "52px 20px 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
             <div>
               <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1.5, lineHeight: 1 }}>TODAY'S <span style={{ color: accent }}>LIFT</span></div>
@@ -1853,10 +1854,10 @@ export default function App() {
 
       {/* ── HISTORY ──────────────────────── */}
       {view === "history" && (
-        <div style={{ padding: "24px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
+        <div style={{ padding: "52px 20px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1 }}>WORKOUT <span style={{ color: accent }}>HISTORY</span></div>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>WORKOUT <span style={{ color: accent }}>HISTORY</span></div>
               <HelpBtn page="history" onOpen={() => setHelpPage("history")} />
             </div>
             {data.workouts.length > 0 && (
@@ -1924,9 +1925,9 @@ export default function App() {
 
       {/* ── PROGRESS ─────────────────────── */}
       {view === "progress" && (
-        <div style={{ padding: "24px 20px" }}>
+        <div style={{ padding: "52px 20px 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1 }}>YOUR <span style={{ color: accent }}>PROGRESS</span></div>
+            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>YOUR <span style={{ color: accent }}>PROGRESS</span></div>
             <HelpBtn page="progress" onOpen={() => setHelpPage("progress")} />
           </div>
           <Big3PRs workouts={data.workouts} />
@@ -1966,7 +1967,7 @@ export default function App() {
                     .reduce((best, s) => { const v = epley1RM(parseFloat(s.weight) || 0, parseInt(s.reps) || 0); return (v && v > best) ? v : best; }, 0);
                   return (
                     <div key={name} id={`exc-${name.replace(/\s+/g, "-")}`} style={{ scrollMarginTop: 16, ...S.card(), border: `1px solid ${BIG3.includes(name) ? lc + "44" : t.border}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                         <div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1, color: lc, lineHeight: 1 }}>{name}</div><div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>{pts.length} session{pts.length !== 1 ? "s" : ""}</div></div>
                         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                           {best1RM > 0 && (
@@ -2004,11 +2005,11 @@ export default function App() {
         const draft = profileDraft;
         const startEdit = () => { setProfileDraft({ ...p }); setEditingProfile(true); };
         const setDraft = (k, v) => setProfileDraft(d => ({ ...d, [k]: v }));
-        const pField = { background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 9, color: t.text, padding: "10px 13px", fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box" };
-        const lbl = { fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5, display: "block" };
+        const pField = { background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box", WebkitAppearance: "none" };
+        const lbl = { fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, display: "block", fontWeight: 700 };
         const dv = (v, u = "") => v ? `${v}${u}` : <span style={{ color: t.textMuted }}>—</span>;
         return (
-          <div style={{ padding: "28px 20px 110px" }}>
+          <div style={{ padding: "52px 20px 110px" }}>
             {!p.firstName && !isEditing && (
               <div style={{ background: `${accent}12`, border: `1px solid ${accent}44`, borderRadius: 12, padding: "14px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 22 }}>👋</span>
@@ -2018,7 +2019,7 @@ export default function App() {
             )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
-                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1, lineHeight: 1 }}>My <span style={{ color: accent }}>Profile</span></div>
+                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 34, letterSpacing: 1, lineHeight: 1 }}>My <span style={{ color: accent }}>Profile</span></div>
                 {p.firstName && <div style={{ color: t.textSub, fontSize: 14, marginTop: 5 }}>Hey, <span style={{ color: t.text, fontWeight: 600 }}>{p.firstName}</span> 👋</div>}
                 {isAdminUser(authedUser) && (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, marginTop: 6, letterSpacing: 0.5 }}>
@@ -2027,7 +2028,7 @@ export default function App() {
                 )}
               </div>
               <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {!isEditing && <button onClick={startEdit} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 9, color: t.textSub, padding: "8px 12px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}><Icon name="edit2" size={13} /> Edit</button>}
+                {!isEditing && <button onClick={startEdit} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, color: t.textSub, padding: "10px 16px", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 600, minHeight: 44 }}><Icon name="edit2" size={14} /> Edit</button>}
                 <HelpBtn page="profile" onOpen={() => setHelpPage("profile")} />
               </div>
             </div>
@@ -2077,7 +2078,7 @@ export default function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
                   {GOALS.map(g => {
                     const sel2 = draft.goal === g.id;
-                    return <button key={g.id} onClick={() => setDraft("goal", sel2 ? null : g.id)} style={{ display: "flex", alignItems: "center", gap: 13, background: sel2 ? `${g.color}18` : t.inputBg, border: `1px solid ${sel2 ? g.color + "88" : t.border}`, borderRadius: 11, padding: "12px 14px", cursor: "pointer", textAlign: "left" }}>
+                    return <button key={g.id} onClick={() => setDraft("goal", sel2 ? null : g.id)} style={{ display: "flex", alignItems: "center", gap: 13, background: sel2 ? `${g.color}18` : t.inputBg, border: `1px solid ${sel2 ? g.color + "88" : t.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", minHeight: 60 }}>
                       <span style={{ fontSize: 22 }}>{g.emoji}</span>
                       <div style={{ flex: 1 }}><div style={{ color: sel2 ? g.color : t.text, fontWeight: 700, fontSize: 14 }}>{g.label}</div><div style={{ color: t.textMuted, fontSize: 12, marginTop: 1 }}>{g.desc}</div></div>
                       {sel2 && <span style={{ color: g.color }}><Icon name="check" size={18} /></span>}
@@ -2085,8 +2086,8 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => setEditingProfile(false)} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 10, padding: 13, fontSize: 15, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-                  <button onClick={() => { saveProfile(draft); setEditingProfile(false); }} style={{ flex: 2, background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 10, padding: 13, fontSize: 16, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>Save Profile</button>
+                  <button onClick={() => setEditingProfile(false)} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 14, padding: "15px 0", fontSize: 15, cursor: "pointer", fontWeight: 600, minHeight: 52 }}>Cancel</button>
+                  <button onClick={() => { saveProfile(draft); setEditingProfile(false); }} style={{ flex: 2, background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 14, padding: "15px 0", fontSize: 17, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1.2, minHeight: 52 }}>Save Profile</button>
                 </div>
 
               </div>
@@ -2192,7 +2193,7 @@ export default function App() {
       )}
 
       {/* ── NAV ──────────────────────────── */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: theme === "dark" ? "rgba(17,17,17,0.92)" : "rgba(255,255,255,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: `1px solid ${t.navBorder}`, display: "flex", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: theme === "dark" ? "rgba(10,10,10,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderTop: `1px solid ${t.navBorder}`, display: "flex", paddingBottom: "env(safe-area-inset-bottom, 0px)", zIndex: 100 }}>
         {navItem("home", "home", "Home")}
         {navItem("log", "plus", "Log")}
         {navItem("history", "history", "History")}
