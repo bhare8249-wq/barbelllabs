@@ -130,6 +130,7 @@ const GOALS = [
 const todayISO = () => new Date().toISOString().split("T")[0];
 const formatDate = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const formatDay  = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const epley1RM   = (w, r) => (w > 0 && r > 0 && r <= 15) ? Math.round(w * (1 + r / 30)) : null;
 
 // ── Icons ─────────────────────────────────────────────────────────────
 const Icon = ({ name, size = 18 }) => {
@@ -597,6 +598,7 @@ function ExerciseBlock({ exercise, onChange, onRemove }) {
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   const removeSet = (i) => onChange({ ...exercise, sets: exercise.sets.filter((_, j) => j !== i) });
+  const t = useT();
   return (
     <div style={S.card()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -607,6 +609,14 @@ function ExerciseBlock({ exercise, onChange, onRemove }) {
         {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
+      <textarea
+        value={exercise.note || ""}
+        onChange={e => onChange({ ...exercise, note: e.target.value })}
+        placeholder="Notes (e.g. felt tight, increase next time…)"
+        rows={1}
+        style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 9, color: t.text, padding: "8px 10px", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.5 }}
+        onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+      />
     </div>
   );
 }
@@ -718,6 +728,7 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
                       <span style={{ color: t.textSub }}>{s.reps} reps</span>
                     </div>
                   ))}
+                  {ex.note && <div style={{ marginTop: 5, fontSize: 12, color: t.textMuted, fontStyle: "italic" }}>📝 {ex.note}</div>}
                 </div>
               ))}
             </div>
@@ -1647,11 +1658,22 @@ export default function App() {
                   const allTimeMax = Math.max(...pts.map(p => p.value));
                   const gain = pts[pts.length - 1].value - pts[0].value;
                   const lc = palette[idx % palette.length];
+                  const best1RM = data.workouts
+                    .flatMap(w => w.exercises.filter(e => e.name === name).flatMap(e => e.sets))
+                    .reduce((best, s) => { const v = epley1RM(parseFloat(s.weight) || 0, parseInt(s.reps) || 0); return (v && v > best) ? v : best; }, 0);
                   return (
                     <div key={name} id={`exc-${name.replace(/\s+/g, "-")}`} style={{ scrollMarginTop: 16, ...S.card(), border: `1px solid ${BIG3.includes(name) ? lc + "44" : t.border}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                         <div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1, color: lc, lineHeight: 1 }}>{name}</div><div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>{pts.length} session{pts.length !== 1 ? "s" : ""}</div></div>
-                        <div style={{ textAlign: "right" }}><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: "#ff9500", lineHeight: 1 }}>{allTimeMax} <span style={{ fontSize: 13, color: t.textMuted }}>lbs</span></div><div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>PR 👑</div></div>
+                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          {best1RM > 0 && (
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: "#5b9bd5", lineHeight: 1 }}>{best1RM} <span style={{ fontSize: 13, color: t.textMuted }}>lbs</span></div>
+                              <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>EST. 1RM</div>
+                            </div>
+                          )}
+                          <div style={{ textAlign: "right" }}><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: "#ff9500", lineHeight: 1 }}>{allTimeMax} <span style={{ fontSize: 13, color: t.textMuted }}>lbs</span></div><div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>PR 👑</div></div>
+                        </div>
                       </div>
                       <LineChart points={pts} lineColor={lc} allTimeMax={allTimeMax} />
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 10, color: t.textMuted }}>
