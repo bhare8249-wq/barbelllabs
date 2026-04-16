@@ -28,7 +28,7 @@ const THEMES = {
 const accent = "#e8ff47";
 
 const makeStyles = (t) => ({
-  card: (extra = {}) => ({ background: t.surfaceHigh, borderRadius: 12, padding: "16px 18px", marginBottom: 14, border: `1px solid ${t.border}`, ...extra }),
+  card: (extra = {}) => ({ background: t.surfaceHigh, borderRadius: 16, padding: "16px 18px", marginBottom: 14, border: `1px solid ${t.border}`, boxShadow: "0 2px 12px rgba(0,0,0,0.18)", ...extra }),
   inputStyle: (extra = {}) => ({ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, padding: "10px 12px", fontSize: 16, outline: "none", width: 120, ...extra }),
   iconBtn: (color) => ({ background: "transparent", border: "none", cursor: "pointer", color: color || t.textMuted, padding: 4, display: "flex", alignItems: "center", borderRadius: 6 }),
   ghostBtn: (extra = {}) => ({ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 8, color: t.textMuted, padding: "6px 12px", fontSize: 13, cursor: "pointer", ...extra }),
@@ -1116,6 +1116,16 @@ export default function App() {
     link.rel = "stylesheet";
     link.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap";
     document.head.appendChild(link);
+    const style = document.createElement("style");
+    style.textContent = `
+      * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+      html, body { overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+      ::-webkit-scrollbar { display: none; }
+      input, textarea { -webkit-user-select: auto !important; user-select: auto !important; }
+      button { -webkit-user-select: none; user-select: none; }
+      button:active { transform: scale(0.96); }
+    `;
+    document.head.appendChild(style);
   }, []);
 
   const handleLogin = (username, isNew = false) => {
@@ -1168,59 +1178,91 @@ export default function App() {
 
   const sel = (extra = {}) => ({ ...S.select(), ...extra });
 
-  const navItem = (v, icon, label) => (
-    <button onClick={() => { if (v === "log" && !workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView(v); }}
-      style={{ flex: 1, background: "transparent", border: "none", borderTop: view === v ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: view === v ? accent : t.textMuted, padding: "10px 0", transition: "color 0.2s", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
-      <Icon name={icon} size={20} />
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>{label}</span>
-    </button>
-  );
+  const navItem = (v, icon, label) => {
+    const active = view === v;
+    return (
+      <button onClick={() => { if (v === "log" && !workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView(v); }}
+        style={{ flex: 1, background: "transparent", border: "none", borderTop: active ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: active ? accent : t.textMuted, padding: "11px 0 9px", transition: "color 0.15s", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
+        <div style={{ transition: "transform 0.15s", transform: active ? "scale(1.1)" : "scale(1)" }}>
+          <Icon name={icon} size={21} />
+        </div>
+        <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, letterSpacing: 0.3, textTransform: "uppercase" }}>{label}</span>
+      </button>
+    );
+  };
 
   return (
     <ThemeCtx.Provider value={theme}>
     <div style={{ background: t.bg, minHeight: "100vh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", transition: "background 0.3s, color 0.3s" }}>
-      {finishMsg && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: accent, color: "#000", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 15, zIndex: 999, boxShadow: "0 4px 20px rgba(232,255,71,0.4)" }}>✓ Workout saved!</div>}
+      {finishMsg && <div style={{ position: "fixed", top: "env(safe-area-inset-top, 16px)", left: "50%", transform: "translateX(-50%)", background: accent, color: "#000", borderRadius: 14, padding: "12px 24px", fontWeight: 700, fontSize: 15, zIndex: 999, boxShadow: "0 8px 32px rgba(232,255,71,0.5)", display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>✓ Workout saved!</div>}
 
       {/* ── HOME ─────────────────────────── */}
-      {view === "home" && (
-        <div style={{ padding: "32px 20px 20px" }}>
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 38, letterSpacing: 2, lineHeight: 1 }}>GYM<span style={{ color: accent }}>TRACK</span></div>
+      {view === "home" && (() => {
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+        const displayName = profile.firstName || authedUser;
+        const statsRow = [
+          { label: "Total", value: data.workouts.length, icon: "🏋️" },
+          { label: "This week", value: data.workouts.filter(w => (new Date() - new Date(w.date)) / 86400000 <= 7).length, icon: "🗓" },
+          { label: "Exercises", value: [...new Set(data.workouts.flatMap(w => w.exercises.map(e => e.name)))].length, icon: "📋" },
+        ];
+        return (
+          <div style={{ padding: "48px 20px 20px" }}>
+            {/* Header */}
+            <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ color: t.textMuted, fontSize: 13, marginBottom: 3 }}>{greeting},</div>
+                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 34, letterSpacing: 1.5, lineHeight: 1 }}>
+                  {displayName} <span style={{ color: accent }}>💪</span>
+                </div>
+                <div style={{ color: t.textMuted, fontSize: 12, marginTop: 5 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+              </div>
               <HelpBtn page="home" onOpen={() => setHelpPage("home")} />
             </div>
-            <div style={{ color: t.textMuted, fontSize: 14, marginTop: 4 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
-            {[
-              { label: "Workouts", value: data.workouts.length },
-              { label: "This Week", value: data.workouts.filter(w => (new Date() - new Date(w.date)) / 86400000 <= 7).length },
-              { label: "Exercises", value: [...new Set(data.workouts.flatMap(w => w.exercises.map(e => e.name)))].length },
-            ].map(s => (
-              <div key={s.label} style={{ ...S.card(), textAlign: "center", padding: "14px 8px", marginBottom: 0 }}>
-                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, color: accent, lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <button onClick={startWorkout} style={{ ...S.solidBtn(), width: "100%", padding: "16px", fontSize: 20, borderRadius: 14, marginBottom: 20 }}>+ Start Workout</button>
-          {data.workouts.length > 0 && (
-            <>
-              <div style={{ color: t.textMuted, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Recent</div>
-              {data.workouts.slice(0, 5).map((w, i) => (
-                <div key={i} style={S.card()}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>{formatDate(w.date)}</div>
-                    <div style={{ color: t.textMuted, fontSize: 13 }}>{w.duration}min</div>
-                  </div>
-                  <div style={{ color: t.textSub, fontSize: 13, marginTop: 4 }}>{w.exercises.map(e => e.name).join(", ")}</div>
+            {/* Stat cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+              {statsRow.map(s => (
+                <div key={s.label} style={{ background: t.surfaceHigh, borderRadius: 16, padding: "14px 8px 12px", textAlign: "center", border: `1px solid ${t.border}`, borderTop: `2px solid ${accent}44`, boxShadow: "0 2px 12px rgba(0,0,0,0.18)" }}>
+                  <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, color: accent, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: 10, color: t.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
                 </div>
               ))}
-            </>
-          )}
-          {data.workouts.length === 0 && <div style={{ textAlign: "center", padding: "40px 0", color: t.textMuted }}><div style={{ fontSize: 15 }}>No workouts yet</div><div style={{ fontSize: 13, marginTop: 4 }}>Hit the button above to get started</div></div>}
-        </div>
-      )}
+            </div>
+            {/* CTA */}
+            <button onClick={startWorkout} style={{ ...S.solidBtn(), width: "100%", padding: "17px", fontSize: 20, borderRadius: 16, marginBottom: 24, boxShadow: `0 4px 20px ${accent}44` }}>+ Start Workout</button>
+            {/* Recent sessions */}
+            {data.workouts.length > 0 && (
+              <>
+                <div style={{ color: t.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 12, fontWeight: 700 }}>Recent Sessions</div>
+                {data.workouts.slice(0, 5).map((w, i) => {
+                  const labels = w.labels || (w.label ? [w.label] : []);
+                  const labelCfgs = labels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
+                  return (
+                    <div key={i} style={{ ...S.card(), display: "flex", alignItems: "center", gap: 12, padding: "13px 16px" }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: labelCfgs[0] ? labelCfgs[0].bg : `${accent}15`, border: `1px solid ${labelCfgs[0] ? labelCfgs[0].border : accent + "30"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                        {labelCfgs[0] ? labelCfgs[0].emoji : "🏋️"}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: t.text }}>{formatDate(w.date)}</div>
+                        <div style={{ color: t.textMuted, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.exercises.map(e => e.name).join(" · ")}</div>
+                      </div>
+                      <div style={{ color: t.textMuted, fontSize: 12, flexShrink: 0 }}>{w.duration ? `${w.duration}m` : ""}</div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            {data.workouts.length === 0 && (
+              <div style={{ textAlign: "center", padding: "48px 0 24px", color: t.textMuted }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🏋️</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: t.textSub, marginBottom: 6 }}>No workouts yet</div>
+                <div style={{ fontSize: 13 }}>Tap the button above to log your first session</div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── LOG ──────────────────────────── */}
       {view === "log" && (
@@ -1623,7 +1665,7 @@ export default function App() {
       )}
 
       {/* ── NAV ──────────────────────────── */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: t.navBg, borderTop: `1px solid ${t.navBorder}`, display: "flex", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: theme === "dark" ? "rgba(17,17,17,0.92)" : "rgba(255,255,255,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: `1px solid ${t.navBorder}`, display: "flex", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {navItem("home", "home", "Home")}
         {navItem("log", "plus", "Log")}
         {navItem("history", "history", "History")}
