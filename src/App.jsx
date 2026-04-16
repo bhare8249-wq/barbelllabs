@@ -44,7 +44,6 @@ const THEMES = {
   },
 };
 const accent     = "#5B9BD5";   // Steel Blue
-const accent2    = "#A8C8E8";   // Powder Blue
 const accentGlow = "rgba(91,155,213,0.20)";
 const haptic = (pattern = 10) => { try { navigator.vibrate(pattern); } catch (_) {} };
 
