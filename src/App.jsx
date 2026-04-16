@@ -117,7 +117,7 @@ const makeStyles = (t) => ({
 // v1.2.1  2026-04-08  Profile: Security Settings added — change email and password with verification flow
 // v1.2.2  2026-04-08  Fixed critical bug: useStorage useEffect was resetting user data on profile edits
 // v2.0.0  2026-04-16  Rebranded to Rep Set. Steel Blue colour system. Visual overhaul. 1RM estimator, exercise notes, plate calculator.
-const APP_VERSION = "0.3.5";
+const APP_VERSION = "0.3.6";
 const BUILD_DATE  = "2026-04-16";
 
 const getUserKey = (u) => `gymtrack-data-${u}`;
@@ -547,15 +547,15 @@ function DualLineChart({ points, lineColor = WEIGHT_COLOR }) {
   const toYw = (v) => padT + plotH - ((v - wMin) / wRange) * plotH;
   const toYr = (v) => padT + plotH - ((v - rMin) / rRange) * plotH;
 
-  // Running PR: a point is a PR if it beats all previous points on weight,
-  // or ties weight with strictly more reps
-  const runningPRs = points.map((p, i) => {
-    if (i === 0) return true;
-    const prev = points.slice(0, i);
-    const prevBestW = Math.max(...prev.map(q => q.value));
-    const prevBestR = Math.max(...prev.filter(q => q.value === prevBestW).map(q => q.reps || 0));
-    return p.value > prevBestW || (p.value === prevBestW && (p.reps || 0) > prevBestR);
-  });
+  // Current PR: find the single best session (highest weight; more reps breaks ties).
+  // Only that one session gets the crown — not every historical milestone.
+  const prIdx = points.reduce((bestI, p, i) => {
+    const best = points[bestI];
+    if (p.value > best.value) return i;
+    if (p.value === best.value && (p.reps || 0) > (best.reps || 0)) return i;
+    return bestI;
+  }, 0);
+  const runningPRs = points.map((_, i) => i === prIdx);
 
   const wPolyline = points.map((p, i) => `${toX(i)},${toYw(p.value)}`).join(" ");
   const rPolyline = hasReps ? points.map((p, i) => `${toX(i)},${toYr(p.reps || 0)}`).join(" ") : "";
