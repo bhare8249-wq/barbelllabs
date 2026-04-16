@@ -306,7 +306,7 @@
     });
 
     let activeFilter = "all";
-    const SHIPPED = ["animated-finish","streak","quick-log","rest-timer-auto","swipe-nav","pwa","google-auth"];
+    const SHIPPED = ["animated-finish","streak","quick-log","rest-timer-auto","swipe-nav","pwa","pr-history","swipe-delete","haptic","keyboard-dismiss","push-notif"];
     const _saved = JSON.parse(localStorage.getItem("gt-roadmap-done") || "null");
     let done = _saved ? [...new Set([...SHIPPED, ..._saved])] : [...SHIPPED];
     localStorage.setItem("gt-roadmap-done", JSON.stringify(done));

@@ -26,6 +26,7 @@ const THEMES = {
   },
 };
 const accent = "#e8ff47";
+const haptic = (pattern = 10) => { try { navigator.vibrate(pattern); } catch (_) {} };
 
 const makeStyles = (t) => ({
   card: (extra = {}) => ({ background: t.surfaceHigh, borderRadius: 16, padding: "16px 18px", marginBottom: 14, border: `1px solid ${t.border}`, boxShadow: "0 2px 12px rgba(0,0,0,0.18)", ...extra }),
@@ -322,19 +323,45 @@ function RestTimer() {
   const [customMin, setCustomMin] = useState("");
   const [customSec, setCustomSec] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+  const notifTimeout = useRef(null);
+
+  const scheduleNotif = (secs) => {
+    if (!("Notification" in window)) return;
+    Notification.requestPermission().then(perm => {
+      if (perm !== "granted") return;
+      if (notifTimeout.current) clearTimeout(notifTimeout.current);
+      notifTimeout.current = setTimeout(() => {
+        navigator.serviceWorker?.ready.then(reg => {
+          reg.showNotification("Rest complete! 💪", {
+            body: "Time to hit your next set",
+            icon: "/logo192.png",
+            tag: "rest-timer",
+            renotify: true,
+            vibrate: [200, 100, 200],
+          });
+        });
+      }, secs * 1000);
+    });
+  };
+  const cancelNotif = () => {
+    if (notifTimeout.current) { clearTimeout(notifTimeout.current); notifTimeout.current = null; }
+  };
 
   useEffect(() => {
     if (!running) return;
-    if (remaining <= 0) { setRunning(false); setDone(true); return; }
+    if (remaining <= 0) { setRunning(false); setDone(true); haptic([0, 80, 40, 80]); cancelNotif(); return; }
     const id = setInterval(() => setRemaining(r => r - 1), 1000);
     return () => clearInterval(id);
-  }, [running, remaining]);
+  }, [running, remaining]); // eslint-disable-line
 
   useEffect(() => {
-    const handler = () => { setRemaining(seconds); setRunning(true); setDone(false); };
+    const handler = () => {
+      setRemaining(seconds); setRunning(true); setDone(false);
+      haptic(10); scheduleNotif(seconds);
+    };
     window.addEventListener("gt-start-timer", handler);
     return () => window.removeEventListener("gt-start-timer", handler);
-  }, [seconds]);
+  }, [seconds]); // eslint-disable-line
 
   const applyCustom = () => {
     const m = parseInt(customMin) || 0;
@@ -347,8 +374,8 @@ function RestTimer() {
   };
 
   const setPreset = (p) => { setSeconds(p); setRemaining(null); setRunning(false); setDone(false); setShowCustom(false); };
-  const start = () => { setRemaining(seconds); setRunning(true); setDone(false); };
-  const stop  = () => { setRunning(false); setRemaining(null); setDone(false); };
+  const start = () => { setRemaining(seconds); setRunning(true); setDone(false); haptic(10); scheduleNotif(seconds); };
+  const stop  = () => { setRunning(false); setRemaining(null); setDone(false); cancelNotif(); };
   const fmt   = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const progress = remaining != null ? remaining / seconds : 1;
   const R = 34, circ = 2 * Math.PI * R;
@@ -564,7 +591,8 @@ function ExerciseBlock({ exercise, onChange, onRemove }) {
   const S = useS();
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1];
-    if (last && (last.weight || last.reps)) window.dispatchEvent(new Event("gt-start-timer"));
+    if (last && (last.weight || last.reps)) { window.dispatchEvent(new Event("gt-start-timer")); }
+    else { haptic(10); }
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
@@ -587,7 +615,12 @@ function ExerciseBlock({ exercise, onChange, onRemove }) {
 function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const swipeTouchX = useRef(null);
+  const startOffset = useRef(0);
+  const isDragging = useRef(false);
+  const DELETE_W = 76;
+
   const activeLabels = workout.labels ? workout.labels : workout.label ? [workout.label] : [];
   const activeCfgs = activeLabels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
   const toggleLabel = (e, id) => {
@@ -595,74 +628,102 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
     let next = activeLabels.includes(id) ? activeLabels.filter(l => l !== id) : activeLabels.length >= 3 ? [...activeLabels.slice(1), id] : [...activeLabels, id];
     onLabelChange(index, next);
   };
+
+  const onCardTouchStart = (e) => {
+    swipeTouchX.current = e.touches[0].clientX;
+    startOffset.current = swipeOffset;
+    isDragging.current = false;
+  };
+  const onCardTouchMove = (e) => {
+    if (swipeTouchX.current === null) return;
+    const dx = e.touches[0].clientX - swipeTouchX.current;
+    if (Math.abs(dx) > 8) {
+      isDragging.current = true;
+      e.stopPropagation();
+      setSwipeOffset(Math.max(Math.min(startOffset.current + dx, 0), -DELETE_W));
+    }
+  };
+  const onCardTouchEnd = (e) => {
+    if (isDragging.current) {
+      e.stopPropagation();
+      if (swipeOffset < -DELETE_W / 2) { setSwipeOffset(-DELETE_W); haptic(10); }
+      else setSwipeOffset(0);
+    } else if (swipeOffset !== 0) {
+      e.stopPropagation();
+      setSwipeOffset(0);
+    }
+    swipeTouchX.current = null;
+  };
+
   return (
-    <div style={{ background: t.surfaceHigh, border: `1px solid ${activeCfgs.length ? activeCfgs[0].border : t.border}`, borderRadius: 14, marginBottom: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "13px 16px", cursor: "pointer", background: activeCfgs.length ? activeCfgs[0].bg : "transparent", transition: "background 0.2s" }}>
-        {activeCfgs.length ? (
-          <div style={{ display: "flex", gap: 5, flexShrink: 0, flexWrap: "wrap", maxWidth: 180 }}>
-            {activeCfgs.map(c => (
-              <span key={c.id} style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.color, borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
-                {c.emoji} {c.label}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span style={{ color: t.textMuted, flexShrink: 0, display: "flex" }}><Icon name="tag" size={14} /></span>
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: t.text }}>{formatDate(workout.date)}</div>
-          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 1 }}>
-            {workout.exercises.length} exercise{workout.exercises.length !== 1 ? "s" : ""}{workout.duration ? ` · ${workout.duration}min` : ""}
-          </div>
-        </div>
-        <span style={{ color: t.textMuted, flexShrink: 0, display: "flex", transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}><Icon name="chevronDown" size={16} /></span>
+    <div style={{ position: "relative", marginBottom: 10, borderRadius: 14, overflow: "hidden" }}>
+      {/* Delete button revealed on swipe left */}
+      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: DELETE_W, background: "#d55b5b", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", borderRadius: "0 14px 14px 0" }}
+        onClick={() => { haptic([0, 60, 30, 60]); onDelete(index); }}>
+        <Icon name="trash" size={18} />
+        <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>Delete</span>
       </div>
-      {open && (
-        <div style={{ padding: "0 16px 14px" }}>
-          {/* Tag picker */}
-          <div style={{ marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Tag this workout</div>
-              <div style={{ fontSize: 10, color: t.textMuted }}>{activeLabels.length}/3 selected</div>
+      {/* Sliding card */}
+      <div style={{ transform: `translateX(${swipeOffset}px)`, transition: isDragging.current ? "none" : "transform 0.25s ease" }}
+        onTouchStart={onCardTouchStart} onTouchMove={onCardTouchMove} onTouchEnd={onCardTouchEnd}>
+        <div style={{ background: t.surfaceHigh, border: `1px solid ${activeCfgs.length ? activeCfgs[0].border : t.border}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.2s" }}>
+          <div onClick={() => { if (swipeOffset !== 0) { setSwipeOffset(0); return; } setOpen(o => !o); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "13px 16px", cursor: "pointer", background: activeCfgs.length ? activeCfgs[0].bg : "transparent", transition: "background 0.2s" }}>
+            {activeCfgs.length ? (
+              <div style={{ display: "flex", gap: 5, flexShrink: 0, flexWrap: "wrap", maxWidth: 180 }}>
+                {activeCfgs.map(c => (
+                  <span key={c.id} style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.color, borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+                    {c.emoji} {c.label}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span style={{ color: t.textMuted, flexShrink: 0, display: "flex" }}><Icon name="tag" size={14} /></span>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: t.text }}>{formatDate(workout.date)}</div>
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 1 }}>
+                {workout.exercises.length} exercise{workout.exercises.length !== 1 ? "s" : ""}{workout.duration ? ` · ${workout.duration}min` : ""}
+              </div>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {WORKOUT_LABELS.map(l => {
-                const isActive = activeLabels.includes(l.id);
-                return (
-                  <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= 3) ? 0.4 : 1 }}>
-                    {l.emoji} {l.label}{isActive && <span style={{ fontSize: 10, marginLeft: 1, opacity: 0.7 }}>✕</span>}
-                  </button>
-                );
-              })}
-            </div>
+            <span style={{ color: t.textMuted, flexShrink: 0, display: "flex", transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}><Icon name="chevronDown" size={16} /></span>
           </div>
-          {/* Sets */}
-          {workout.exercises.map((ex, j) => (
-            <div key={j} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: j < workout.exercises.length - 1 ? `1px solid ${t.border}` : "none" }}>
-              <div style={{ color: accent, fontSize: 13, fontWeight: 700, marginBottom: 5 }}>{ex.name}</div>
-              {ex.sets.map((s, k) => (
-                <div key={k} style={{ display: "flex", gap: 8, fontSize: 13 }}>
-                  <span style={{ color: t.textMuted, width: 18 }}>{k + 1}.</span>
-                  <span style={{ color: t.textSub }}>{s.weight} lbs</span>
-                  <span style={{ color: t.textMuted }}>×</span>
-                  <span style={{ color: t.textSub }}>{s.reps} reps</span>
+          {open && (
+            <div style={{ padding: "0 16px 14px" }}>
+              {/* Tag picker */}
+              <div style={{ marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Tag this workout</div>
+                  <div style={{ fontSize: 10, color: t.textMuted }}>{activeLabels.length}/3 selected</div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {WORKOUT_LABELS.map(l => {
+                    const isActive = activeLabels.includes(l.id);
+                    return (
+                      <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= 3) ? 0.4 : 1 }}>
+                        {l.emoji} {l.label}{isActive && <span style={{ fontSize: 10, marginLeft: 1, opacity: 0.7 }}>✕</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Sets */}
+              {workout.exercises.map((ex, j) => (
+                <div key={j} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: j < workout.exercises.length - 1 ? `1px solid ${t.border}` : "none" }}>
+                  <div style={{ color: accent, fontSize: 13, fontWeight: 700, marginBottom: 5 }}>{ex.name}</div>
+                  {ex.sets.map((s, k) => (
+                    <div key={k} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+                      <span style={{ color: t.textMuted, width: 18 }}>{k + 1}.</span>
+                      <span style={{ color: t.textSub }}>{s.weight} lbs</span>
+                      <span style={{ color: t.textMuted }}>×</span>
+                      <span style={{ color: t.textSub }}>{s.reps} reps</span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
-          ))}
-          {/* Delete */}
-          {!confirmDelete
-            ? <button onClick={() => setConfirmDelete(true)} style={{ marginTop: 6, background: "transparent", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><Icon name="trash" size={13} /> Delete Workout</button>
-            : <div style={{ marginTop: 6, background: "rgba(213,91,91,0.08)", border: "1px solid rgba(213,91,91,0.3)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ color: "#d55b5b", fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Delete this workout? This cannot be undone.</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => onDelete(index)} style={{ flex: 1, background: "#d55b5b", color: "#fff", border: "none", borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Yes, Delete</button>
-                  <button onClick={() => setConfirmDelete(false)} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 8, padding: "8px 0", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                </div>
-              </div>
-          }
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -944,67 +1005,15 @@ function AdminPanel({ currentUser }) {
   );
 }
 
-// ── Google Sign In ────────────────────────────────────────────────────
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
-
-function GoogleSignInButton({ onLogin }) {
-  const [ready, setReady] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-    const check = setInterval(() => {
-      if (window.google?.accounts?.id) { setReady(true); clearInterval(check); }
-    }, 200);
-    return () => clearInterval(check);
-  }, []);
-
-  const handleGoogle = () => {
-    if (!ready || !GOOGLE_CLIENT_ID) return;
-    setLoading(true);
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: (response) => {
-        setLoading(false);
-        try {
-          const payload = JSON.parse(atob(response.credential.split(".")[1]));
-          const { sub, email, given_name, name } = payload;
-          const username = `g_${sub.slice(-10)}`;
-          const users = getUsers();
-          if (!users[username]) {
-            users[username] = { passwordHash: "", email, verified: true, isGoogle: true, displayName: given_name || name };
-            saveUsers(users);
-          }
-          onLogin(username, !users[username].passwordHash);
-        } catch { setLoading(false); }
-      },
-    });
-    window.google.accounts.id.prompt((n) => {
-      if (n.isNotDisplayed() || n.isSkippedMoment()) {
-        window.google.accounts.id.renderButton(document.getElementById("gt-google-btn"), { theme: "filled_black", size: "large", width: 360 });
-      }
-    });
-  };
-
-  if (!GOOGLE_CLIENT_ID) return (
+// ── Google Sign In (Coming Soon) ──────────────────────────────────────
+function GoogleSignInButton() {
+  return (
     <div style={{ marginBottom: 10 }}>
       <button disabled style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#ccc", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: 0.45, boxSizing: "border-box" }}>
         <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
         Continue with Google
       </button>
       <div style={{ textAlign: "center", fontSize: 10, color: "#444", marginTop: 4 }}>Coming soon</div>
-    </div>
-  );
-
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div id="gt-google-btn" />
-      <button onClick={handleGoogle} style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#fff", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: ready ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: ready ? 1 : 0.6, boxSizing: "border-box", touchAction: "manipulation" }}>
-        {loading ? <span style={{ fontSize: 13, color: "#888" }}>Signing in…</span> : <>
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-          Continue with Google
-        </>}
-      </button>
     </div>
   );
 }
@@ -1148,7 +1157,7 @@ function LandingPage({ onLogin }) {
               <div style={{ flex: 1, height: 1, background: "#2a2a2a" }} />
             </div>
             {/* Google Sign In */}
-            <GoogleSignInButton onLogin={onLogin} />
+            <GoogleSignInButton />
             {/* Apple — coming soon */}
             <div style={{ marginBottom: 10 }}>
               <button disabled style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#ccc", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: 0.45, boxSizing: "border-box" }}>
@@ -1186,8 +1195,10 @@ function WorkoutCompleteScreen({ workout, prevWorkouts, onClose }) {
   useEffect(() => {
     const t1 = setTimeout(() => setVisible(true), 30);
     const t2 = setTimeout(onClose, 8000);
+    if (prs.length > 0) haptic([0, 80, 40, 80, 40, 200]);
+    else haptic([0, 60, 30, 60]);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [onClose]);
+  }, [onClose]); // eslint-disable-line
 
   const totalSets = workout.exercises.reduce((n, ex) => n + ex.sets.length, 0);
   const totalReps = workout.exercises.reduce((n, ex) => n + ex.sets.reduce((s, set) => s + (parseInt(set.reps) || 0), 0), 0);
@@ -1267,7 +1278,10 @@ export default function App() {
   const profile = data.profile || {};
   const SWIPE_VIEWS = ["home", "log", "history", "progress", "profile"];
   const touchX = useRef(null); const touchY = useRef(null);
-  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; touchY.current = e.touches[0].clientY; };
+  const onTouchStart = (e) => {
+    touchX.current = e.touches[0].clientX; touchY.current = e.touches[0].clientY;
+    if (!e.target.closest("input, textarea, select")) document.activeElement?.blur();
+  };
   const onTouchEnd = (e) => {
     if (touchX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchX.current;
@@ -1330,6 +1344,7 @@ export default function App() {
     const cleaned = { ...workout, duration: Math.round((Date.now() - workout.startTime) / 60000), exercises: workout.exercises.map(e => ({ ...e, sets: e.sets.filter(s => s.weight !== "" || s.reps !== "") })).filter(e => e.sets.length > 0) };
     const prev = data.workouts;
     save({ ...data, workouts: [cleaned, ...data.workouts] });
+    haptic([0, 60, 30, 60, 30, 120]);
     setWorkout(null); setView("home");
     setCompletedWorkout({ workout: cleaned, prevWorkouts: prev });
   };
