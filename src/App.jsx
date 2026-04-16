@@ -1271,6 +1271,76 @@ function WorkoutCompleteScreen({ workout, prevWorkouts, onClose }) {
   );
 }
 
+// ── Plate Calculator ─────────────────────────────────────────────────
+const PLATES = [45, 35, 25, 10, 5, 2.5];
+const PLATE_COLORS = { 45: "#d55b5b", 35: "#5b9bd5", 25: "#e8ff47", 10: "#5bb85b", 5: "#b55bd5", 2.5: "#d5a55b" };
+const BAR_WEIGHT = 45;
+
+function calcPlates(target) {
+  let remaining = (target - BAR_WEIGHT) / 2;
+  if (remaining < 0) return null;
+  const result = [];
+  for (const plate of PLATES) {
+    const count = Math.floor(remaining / plate);
+    if (count > 0) { result.push({ weight: plate, count }); remaining = Math.round((remaining - plate * count) * 100) / 100; }
+  }
+  return { plates: result, remainder: remaining };
+}
+
+function PlateCalculator({ onClose }) {
+  const t = useT(); const S = useS();
+  const [target, setTarget] = useState("");
+  const result = target ? calcPlates(parseFloat(target) || 0) : null;
+  const total = result ? BAR_WEIGHT + result.plates.reduce((s, p) => s + p.weight * p.count * 2, 0) : 0;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+      <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 16 }}>
+          Plate <span style={{ color: accent }}>Calculator</span>
+        </div>
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Target Weight (lbs)</div>
+        <input
+          type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="e.g. 225"
+          autoFocus inputMode="decimal"
+          style={{ ...S.inputStyle({ width: "100%", fontSize: 22, padding: "12px 14px", borderRadius: 12, marginBottom: 16 }) }}
+        />
+        {result && (
+          <>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Each side of the bar</div>
+            {result.plates.length === 0 && result.remainder === 0 && (
+              <div style={{ color: t.textMuted, fontSize: 14 }}>Just the bar ({BAR_WEIGHT} lbs)</div>
+            )}
+            {result.plates.map(p => (
+              <div key={p.weight} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div style={{ width: 52, height: 52, borderRadius: "50%", background: PLATE_COLORS[p.weight] + "22", border: `2px solid ${PLATE_COLORS[p.weight]}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue', cursive", fontSize: 16, color: PLATE_COLORS[p.weight], flexShrink: 0 }}>
+                  {p.weight}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: t.text }}>× {p.count}</div>
+                  <div style={{ fontSize: 11, color: t.textMuted }}>{p.weight * p.count} lbs per side</div>
+                </div>
+              </div>
+            ))}
+            {result.remainder > 0 && (
+              <div style={{ fontSize: 12, color: "#d55b5b", marginTop: 4 }}>⚠ {result.remainder} lbs unaccounted — not achievable with standard plates</div>
+            )}
+            <div style={{ marginTop: 14, padding: "10px 14px", background: t.surfaceHigh, borderRadius: 10, border: `1px solid ${t.border}`, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ color: t.textMuted }}>Actual weight loaded</span>
+              <span style={{ fontWeight: 700, color: total === parseFloat(target) ? "#5bb85b" : accent }}>{total} lbs</span>
+            </div>
+          </>
+        )}
+        {result === null && target !== "" && (
+          <div style={{ fontSize: 13, color: "#d55b5b" }}>Weight must be greater than {BAR_WEIGHT} lbs (bar weight)</div>
+        )}
+        <button onClick={onClose} style={{ ...S.solidBtn({ marginTop: 18, width: "100%", padding: 14, fontSize: 16 }) }}>Done</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────
 export default function App() {
   const [authedUser, setAuthedUser] = useState(() => { try { return sessionStorage.getItem("gymtrack-user") || null; } catch { return null; } });
@@ -1284,6 +1354,7 @@ export default function App() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({});
   const [helpPage, setHelpPage] = useState(null);
+  const [showPlateCalc, setShowPlateCalc] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -1475,6 +1546,7 @@ export default function App() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 13, color: t.textSub }}>⏱ {Math.round((Date.now() - workout.startTime) / 60000)}min</div>}
+              <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 13, color: t.textSub, cursor: "pointer", fontWeight: 600 }}>🏋️ Plates</button>
               <HelpBtn page="log" onOpen={() => setHelpPage("log")} />
             </div>
           </div>
@@ -1861,6 +1933,7 @@ export default function App() {
 
       {/* ── HELP MODAL ───────────────────── */}
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
+      {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
 
       {/* ── SIGN OUT — fixed above nav on profile tab ── */}
       {view === "profile" && (
