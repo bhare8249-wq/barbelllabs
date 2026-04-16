@@ -1,5 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback } from "react";
-import { api } from "./api";
+import { useState, useEffect, createContext, useContext } from "react";
 
 // ── Theme ─────────────────────────────────────────────────────────────
 const ThemeCtx = createContext("dark");
@@ -30,10 +29,10 @@ const accent = "#e8ff47";
 
 const makeStyles = (t) => ({
   card: (extra = {}) => ({ background: t.surfaceHigh, borderRadius: 12, padding: "16px 18px", marginBottom: 14, border: `1px solid ${t.border}`, ...extra }),
-  inputStyle: (extra = {}) => ({ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, padding: "6px 10px", fontSize: 14, outline: "none", width: 120, ...extra }),
+  inputStyle: (extra = {}) => ({ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, padding: "10px 12px", fontSize: 16, outline: "none", width: 120, ...extra }),
   iconBtn: (color) => ({ background: "transparent", border: "none", cursor: "pointer", color: color || t.textMuted, padding: 4, display: "flex", alignItems: "center", borderRadius: 6 }),
   ghostBtn: (extra = {}) => ({ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 8, color: t.textMuted, padding: "6px 12px", fontSize: 13, cursor: "pointer", ...extra }),
-  solidBtn: (extra = {}) => ({ background: accent, color: "#000", border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, fontSize: 16, ...extra }),
+  solidBtn: (extra = {}) => ({ background: accent, color: "#000", border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, fontSize: 16, touchAction: "manipulation", ...extra }),
   select: (extra = {}) => ({ background: t.surfaceHigh, color: accent, border: `1px solid ${accent}44`, borderRadius: 8, padding: "7px 28px 7px 11px", fontSize: 12, fontWeight: 700, cursor: "pointer", outline: "none", appearance: "none", WebkitAppearance: "none", letterSpacing: 0.3, ...extra }),
 });
 
@@ -64,34 +63,39 @@ const makeStyles = (t) => ({
 // v1.2.0  2026-04-08  Help button redesigned as consistent pill button across all pages
 // v1.2.1  2026-04-08  Profile: Security Settings added — change email and password with verification flow
 // v1.2.2  2026-04-08  Fixed critical bug: useStorage useEffect was resetting user data on profile edits
-// v1.2.3  2026-04-10  UI polish: nav active indicator, stat card accent borders, recent session tags on Home, normalized page padding
-// v1.3.0  2026-04-10  Backend added: Express + PostgreSQL API, JWT auth, cross-device sync, admin panel reads live DB
-const APP_VERSION = "1.3.0";
-const BUILD_DATE  = "2026-04-10";
+const APP_VERSION = "1.2.2";
+const BUILD_DATE  = "2026-04-08";
 
-// ── API-backed storage ────────────────────────────────────────────────
+const getUserKey = (u) => `gymtrack-data-${u}`;
+const AUTH_KEY = "gymtrack-auth";
+const getUsers = () => { try { return JSON.parse(localStorage.getItem(AUTH_KEY) || "{}"); } catch { return {}; } };
+const saveUsers = (u) => { try { localStorage.setItem(AUTH_KEY, JSON.stringify(u)); } catch {} };
+
 function useStorage(username) {
-  const [data, setData] = useState({ workouts: [], bodyweight: [] });
-  const [synced, setSynced] = useState(false);
-
-  // Load from backend on mount / user change
-  useEffect(() => {
-    if (!username) return;
-    api.get("/api/data")
-      .then(d => { setData(d); setSynced(true); })
-      .catch(() => setSynced(true)); // still mark synced so UI renders
-  }, [username]);
-
-  const save = useCallback((next) => {
-    setData(next);
-    api.put("/api/data", next).catch(console.error);
-  }, []);
-
-  return [data, save, synced];
+  const key = getUserKey(username || "__guest__");
+  const [data, setData] = useState(() => {
+    try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : { workouts: [], bodyweight: [] }; }
+    catch { return { workouts: [], bodyweight: [] }; }
+  });
+  const save = (next) => { setData(next); try { localStorage.setItem(key, JSON.stringify(next)); } catch {} };
+  return [data, save];
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────
 const ADMIN_USER = "admin";
+const ADMIN_HASH = btoa("1.Billion*");
+
+// Seed admin account into localStorage if it doesn't exist
+(() => {
+  try {
+    const users = getUsers();
+    if (!users[ADMIN_USER]) {
+      users[ADMIN_USER] = { passwordHash: ADMIN_HASH, email: "admin@gymtrack.app", verified: true, isAdmin: true };
+      saveUsers(users);
+    }
+  } catch {}
+})();
+
 const isAdminUser = (u) => u === ADMIN_USER;
 
 
@@ -487,7 +491,7 @@ function LineChart({ points, lineColor = accent, allTimeMax }) {
 
 // ── Big 3 PRs ─────────────────────────────────────────────────────────
 function Big3PRs({ workouts }) {
-  const t = useT();
+  const t = useT(); const S = useS();
   const cfg = {
     "Bench Press": { emoji: "🏋️", color: "#5b9bd5", borderColor: "#1a3a5a", bgColor: "rgba(58,111,168,0.1)" },
     "Squat":       { emoji: "🦵", color: "#5bb85b", borderColor: "#1a3a1a", bgColor: "rgba(74,122,74,0.1)" },
@@ -541,9 +545,9 @@ function SetRow({ set, index, onChange, onRemove }) {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
       <span style={{ width: 22, color: t.textMuted, fontSize: 13, textAlign: "center" }}>{index + 1}</span>
-      <input type="number" placeholder="lbs" value={set.weight} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72 })} />
+      <input type="number" inputMode="decimal" placeholder="lbs" value={set.weight} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 76 })} />
       <span style={{ color: t.textMuted, fontSize: 13 }}>×</span>
-      <input type="number" placeholder="reps" value={set.reps} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 64 })} />
+      <input type="number" inputMode="numeric" placeholder="reps" value={set.reps} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 68 })} />
       <button onClick={onRemove} style={S.iconBtn("#ff5b5b")}><Icon name="x" size={14} /></button>
     </div>
   );
@@ -551,7 +555,7 @@ function SetRow({ set, index, onChange, onRemove }) {
 
 // ── Exercise Block ────────────────────────────────────────────────────
 function ExerciseBlock({ exercise, onChange, onRemove }) {
-  const S = useS();
+  const t = useT(); const S = useS();
   const addSet = () => onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   const removeSet = (i) => onChange({ ...exercise, sets: exercise.sets.filter((_, j) => j !== i) });
@@ -571,7 +575,7 @@ function ExerciseBlock({ exercise, onChange, onRemove }) {
 
 // ── History Card ──────────────────────────────────────────────────────
 function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
-  const t = useT();
+  const t = useT(); const S = useS();
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const activeLabels = workout.labels ? workout.labels : workout.label ? [workout.label] : [];
@@ -654,8 +658,8 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
 }
 
 // ── Security Settings Component ───────────────────────────────────────
-function SecuritySettings({ authedUser, currentEmail }) {
-  const t = useT();
+function SecuritySettings({ authedUser }) {
+  const t = useT(); const S = useS();
   const [showSecurity, setShowSecurity] = useState(false);
   const [secTab, setSecTab] = useState("email");
   const [newEmail, setNewEmail] = useState("");
@@ -676,29 +680,46 @@ function SecuritySettings({ authedUser, currentEmail }) {
   ];
   const pwValid = pwRules.every(r => r.ok);
 
-  const handleEmailChange = async () => {
+  const handleEmailChange = () => {
+    const users = getUsers();
+    const user = users[authedUser];
     if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
       setSecMsg({ type: "error", text: "Please enter a valid email address." }); return;
     }
-    try {
-      await api.post("/api/auth/change-email", { newEmail });
-      setSecVerify(true);
-      setSecMsg({ type: "success", text: `Verification sent to ${newEmail}` });
-    } catch (err) { setSecMsg({ type: "error", text: err.message }); }
+    if (newEmail === user.email) {
+      setSecMsg({ type: "error", text: "That's already your current email." }); return;
+    }
+    if (Object.entries(users).some(([u, d]) => u !== authedUser && d.email === newEmail)) {
+      setSecMsg({ type: "error", text: "That email is already linked to another account." }); return;
+    }
+    users[authedUser] = { ...user, email: newEmail, verified: false };
+    saveUsers(users);
+    setSecVerify(true);
+    setSecMsg({ type: "success", text: `Verification sent to ${newEmail}` });
   };
 
-  const handlePasswordChange = async () => {
-    if (!pwValid) { setSecMsg({ type: "error", text: "New password doesn't meet all requirements." }); return; }
-    if (newPw !== confirmPw) { setSecMsg({ type: "error", text: "Passwords do not match." }); return; }
-    try {
-      const res = await api.post("/api/auth/change-password", { currentPassword: currentPw, newPassword: newPw });
-      setSecVerify(true);
-      setSecMsg({ type: "success", text: `Confirmation sent to ${res.email}` });
-    } catch (err) { setSecMsg({ type: "error", text: err.message }); }
+  const handlePasswordChange = () => {
+    const users = getUsers();
+    const user = users[authedUser];
+    if (user.passwordHash !== btoa(currentPw)) {
+      setSecMsg({ type: "error", text: "Current password is incorrect." }); return;
+    }
+    if (!pwValid) {
+      setSecMsg({ type: "error", text: "New password doesn't meet all requirements." }); return;
+    }
+    if (newPw !== confirmPw) {
+      setSecMsg({ type: "error", text: "Passwords do not match." }); return;
+    }
+    users[authedUser] = { ...user, passwordHash: btoa(newPw), verified: false };
+    saveUsers(users);
+    setSecVerify(true);
+    setSecMsg({ type: "success", text: `Confirmation sent to ${user.email}` });
   };
 
-  const confirmVerified = async () => {
-    try { await api.post("/api/auth/verify", {}); } catch {}
+  const confirmVerified = () => {
+    const users = getUsers();
+    users[authedUser].verified = true;
+    saveUsers(users);
     setSecVerify(false); setShowSecurity(false);
     setNewEmail(""); setCurrentPw(""); setNewPw(""); setConfirmPw("");
     setSecMsg({ type: "success", text: secTab === "email" ? "Email updated and verified." : "Password updated and verified." });
@@ -745,7 +766,7 @@ function SecuritySettings({ authedUser, currentEmail }) {
           {secTab === "email" && (
             <div>
               <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
-                Current: <span style={{ color: t.text, fontWeight: 600 }}>{currentEmail || "—"}</span>
+                Current: <span style={{ color: t.text, fontWeight: 600 }}>{getUsers()[authedUser]?.email || "—"}</span>
               </div>
               <label style={lbl}>New Email Address</label>
               <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setSecMsg(null); }} placeholder="new@email.com" style={{ ...pField, marginBottom: 12 }} />
@@ -792,28 +813,34 @@ function SecuritySettings({ authedUser, currentEmail }) {
 function AdminPanel({ currentUser }) {
   const t = useT(); const S = useS();
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState(() => getUsers());
 
-  const refresh = () => {
-    setLoading(true);
-    api.get("/api/admin/users")
-      .then(rows => { setUsers(rows); setLoading(false); })
-      .catch(() => setLoading(false));
+  const refresh = () => setUsers(getUsers());
+
+  const deleteUser = (username) => {
+    if (username === ADMIN_USER) return;
+    const u = getUsers();
+    delete u[username];
+    saveUsers(u);
+    try { localStorage.removeItem(getUserKey(username)); } catch {}
+    setConfirmDelete(null);
+    refresh();
   };
 
-  useEffect(() => { refresh(); }, []);
-
-  const deleteUser = async (username) => {
+  const getUserStats = (username) => {
     try {
-      await api.delete(`/api/admin/users/${username}`);
-      setConfirmDelete(null);
-      refresh();
-    } catch (err) { alert(err.message); }
+      const raw = localStorage.getItem(getUserKey(username));
+      const data = raw ? JSON.parse(raw) : { workouts: [] };
+      return {
+        workouts: data.workouts?.length || 0,
+        exercises: [...new Set((data.workouts || []).flatMap(w => w.exercises?.map(e => e.name) || []))].length,
+        lastSession: data.workouts?.[0]?.date || null,
+      };
+    } catch { return { workouts: 0, exercises: 0, lastSession: null }; }
   };
 
-  const allUsers = [...users].sort((a, b) => a.username === ADMIN_USER ? -1 : b.username === ADMIN_USER ? 1 : a.username.localeCompare(b.username));
-  const totalWorkouts = allUsers.reduce((acc, u) => acc + (u.workout_count || 0), 0);
+  const allUsers = Object.entries(users).sort(([a], [b]) => a === ADMIN_USER ? -1 : b === ADMIN_USER ? 1 : a.localeCompare(b));
+  const totalWorkouts = allUsers.reduce((acc, [u]) => acc + getUserStats(u).workouts, 0);
 
   return (
     <div style={{ padding: "24px 20px 100px" }}>
@@ -825,7 +852,7 @@ function AdminPanel({ currentUser }) {
             Admin <span style={{ color: accent }}>Panel</span>
           </div>
         </div>
-        <div style={{ color: t.textMuted, fontSize: 12 }}>Cross-device user management — GymTrack v{APP_VERSION}</div>
+        <div style={{ color: t.textMuted, fontSize: 12 }}>Device user management — GymTrack v{APP_VERSION}</div>
       </div>
 
       {/* Summary cards */}
@@ -833,7 +860,7 @@ function AdminPanel({ currentUser }) {
         {[
           { label: "Total Users", value: allUsers.length },
           { label: "Total Workouts", value: totalWorkouts },
-          { label: "Active Accounts", value: allUsers.filter(u => (u.workout_count || 0) > 0).length },
+          { label: "Active Accounts", value: allUsers.filter(([u]) => getUserStats(u).workouts > 0).length },
         ].map(s => (
           <div key={s.label} style={{ ...S.card(), textAlign: "center", padding: "12px 8px", marginBottom: 0 }}>
             <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 26, color: accent, lineHeight: 1 }}>{s.value}</div>
@@ -847,28 +874,27 @@ function AdminPanel({ currentUser }) {
         Registered Users
       </div>
 
-      {loading && <div style={{ textAlign: "center", color: t.textMuted, padding: 24 }}>Loading users…</div>}
-      {!loading && allUsers.map((userRow) => {
-        const username = userRow.username;
-        const isAdminRow = username === ADMIN_USER;
+      {allUsers.map(([username, info]) => {
+        const stats = getUserStats(username);
+        const isAdmin = username === ADMIN_USER;
         return (
           <div key={username} style={{ ...S.card(), marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {/* Avatar */}
-                <div style={{ width: 38, height: 38, borderRadius: "50%", background: isAdminRow ? `${accent}22` : t.surfaceHigh, border: `2px solid ${isAdminRow ? accent : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, fontWeight: 700, color: isAdminRow ? accent : t.text }}>
+                <div style={{ width: 38, height: 38, borderRadius: "50%", background: isAdmin ? `${accent}22` : t.surfaceHigh, border: `2px solid ${isAdmin ? accent : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, fontWeight: 700, color: isAdmin ? accent : t.text }}>
                   {username[0].toUpperCase()}
                 </div>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: t.text }}>@{username}</span>
-                    {isAdminRow && <span style={{ background: accent, color: "#000", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.5 }}>⚙ ADMIN</span>}
-                    {userRow.verified && <span style={{ background: "rgba(91,184,91,0.12)", border: "1px solid rgba(91,184,91,0.3)", color: "#5bb85b", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 6px" }}>✓</span>}
+                    {isAdmin && <span style={{ background: accent, color: "#000", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.5 }}>⚙ ADMIN</span>}
+                    {info.verified && <span style={{ background: "rgba(91,184,91,0.12)", border: "1px solid rgba(91,184,91,0.3)", color: "#5bb85b", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 6px" }}>✓</span>}
                   </div>
-                  <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2 }}>{userRow.email || "—"}</div>
+                  <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2 }}>{info.email || "—"}</div>
                 </div>
               </div>
-              {!isAdminRow && (
+              {!isAdmin && (
                 <button onClick={() => setConfirmDelete(username)} style={{ background: "rgba(213,91,91,0.1)", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                   Delete
                 </button>
@@ -878,8 +904,9 @@ function AdminPanel({ currentUser }) {
             {/* Stats row */}
             <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
               {[
-                { label: "Workouts", val: userRow.workout_count || 0 },
-                { label: "Last Session", val: userRow.last_session ? new Date(userRow.last_session).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—" },
+                { label: "Workouts", val: stats.workouts },
+                { label: "Exercises", val: stats.exercises },
+                { label: "Last Session", val: stats.lastSession ? new Date(stats.lastSession).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—" },
               ].map(s => (
                 <div key={s.label}>
                   <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>{s.label}</div>
@@ -917,39 +944,37 @@ function LandingPage({ onLogin }) {
   const [showPass, setShowPass] = useState(false);
   const [animIn, setAnimIn] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState("");
-  const [verifiedUser, setVerifiedUser] = useState("");
   const bg = THEMES.dark.bg; const sh = THEMES.dark.surfaceHigh;
 
   useEffect(() => { setTimeout(() => setAnimIn(true), 60); }, []);
 
   const switchMode = (m) => { setMode(m); setError(""); setUsername(""); setEmail(""); setPassword(""); };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const u = username.trim(), em = email.trim();
     if (mode === "signup") {
       if (!u || !em || !password) { setError("Please fill in all fields."); return; }
-      if (password.length < 8)     { setError("Password must be at least 8 characters."); return; }
-      if (!/[A-Z]/.test(password)) { setError("Password must include at least 1 uppercase letter."); return; }
-      if (!/[a-z]/.test(password)) { setError("Password must include at least 1 lowercase letter."); return; }
-      if (!/[0-9]/.test(password)) { setError("Password must include at least 1 digit."); return; }
-      try {
-        const res = await api.post("/api/auth/register", { username: u, email: em, password });
-        api.setToken(res.token);
-        setVerifiedEmail(em);
-        setMode("verify");
-        setVerifiedUser(res.username);
-      } catch (err) { setError(err.message); }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError("Please enter a valid email address."); return; }
+      const users = getUsers();
+      if (users[u]) { setError("Username already exists."); return; }
+      if (Object.values(users).some(usr => usr.email === em)) { setError("An account with this email already exists."); return; }
+      if (password.length < 8)       { setError("Password must be at least 8 characters."); return; }
+      if (!/[A-Z]/.test(password))   { setError("Password must include at least 1 uppercase letter."); return; }
+      if (!/[a-z]/.test(password))   { setError("Password must include at least 1 lowercase letter."); return; }
+      if (!/[0-9]/.test(password))   { setError("Password must include at least 1 digit."); return; }
+      users[u] = { passwordHash: btoa(password), email: em, verified: false };
+      saveUsers(users);
+      setVerifiedEmail(em);
+      setMode("verify");
     } else {
       if (!u || !password) { setError("Please fill in all fields."); return; }
-      try {
-        const res = await api.post("/api/auth/login", { username: u, password });
-        api.setToken(res.token);
-        onLogin(res.username, false, res.isAdmin);
-      } catch (err) { setError(err.message || "Invalid username or password."); }
+      const users = getUsers();
+      if (!users[u] || users[u].passwordHash !== btoa(password)) { setError("Invalid username or password."); return; }
+      onLogin(u, false);
     }
   };
 
-  const fStyle = { background: "#111", border: "1px solid #2d2d2d", borderRadius: 11, color: "#fff", padding: "13px 16px", fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box" };
+  const fStyle = { background: "#111", border: "1px solid #2d2d2d", borderRadius: 11, color: "#fff", padding: "13px 16px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box" };
 
   return (
     <div style={{ background: bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 28px", fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto" }}>
@@ -985,7 +1010,7 @@ function LandingPage({ onLogin }) {
               <div>3. Return here to sign in</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={async () => { try { await api.post("/api/auth/verify", {}); } catch {} onLogin(verifiedUser, true, false); }} style={{ width: "100%", background: accent, color: "#000", border: "none", borderRadius: 11, padding: 14, fontSize: 16, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: "pointer" }}>I've Verified — Continue</button>
+              <button onClick={() => { const users = getUsers(); const u = Object.keys(users).find(k => users[k].email === verifiedEmail); if (u) { users[u].verified = true; saveUsers(users); onLogin(u, true); } }} style={{ width: "100%", background: accent, color: "#000", border: "none", borderRadius: 11, padding: 14, fontSize: 16, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: "pointer" }}>I've Verified — Continue</button>
               <button onClick={() => switchMode("login")} style={{ width: "100%", background: "transparent", color: "#555", border: "1px solid #2a2a2a", borderRadius: 11, padding: 12, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Back to Sign In</button>
             </div>
             <div style={{ marginTop: 16, fontSize: 12, color: "#3a3a3a" }}>Didn't receive it? Check your spam folder</div>
@@ -1069,23 +1094,8 @@ function LandingPage({ onLogin }) {
 
 // ── Main App ──────────────────────────────────────────────────────────
 export default function App() {
-  const [authedUser, setAuthedUser] = useState(() => { try { return localStorage.getItem("gymtrack-user") || null; } catch { return null; } });
-  const [isAdmin, setIsAdmin] = useState(() => {
-    try { return localStorage.getItem("gymtrack-user") === ADMIN_USER; } catch { return false; }
-  });
-  const [userInfo, setUserInfo] = useState({ email: "", verified: false });
+  const [authedUser, setAuthedUser] = useState(() => { try { return sessionStorage.getItem("gymtrack-user") || null; } catch { return null; } });
   const [data, save] = useStorage(authedUser);
-
-  // Fetch current user info (email, verified) when logged in
-  useEffect(() => {
-    if (!authedUser) return;
-    api.get("/api/auth/me")
-      .then(info => {
-        setUserInfo({ email: info.email, verified: info.verified });
-        setIsAdmin(info.is_admin || false);
-      })
-      .catch(() => {});
-  }, [authedUser]);
   const [view, setView] = useState("home");
   const [workout, setWorkout] = useState(null);
   const [exSearch, setExSearch] = useState("");
@@ -1108,25 +1118,14 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  const handleLogin = (username, isNew = false, adminFlag = false) => {
-    try { localStorage.setItem("gymtrack-user", username); } catch {}
-    setAuthedUser(username);
-    setIsAdmin(adminFlag || isAdminUser(username));
-    setWorkout(null);
-    setView(isNew ? "profile" : "home");
+  const handleLogin = (username, isNew = false) => {
+    try { sessionStorage.setItem("gymtrack-user", username); } catch {}
+    setAuthedUser(username); setWorkout(null); setView(isNew ? "profile" : "home");
   };
   const handleLogout = () => {
-    try { localStorage.removeItem("gymtrack-user"); } catch {}
-    api.clearToken();
-    setAuthedUser(null); setIsAdmin(false); setWorkout(null); setView("home");
+    try { sessionStorage.removeItem("gymtrack-user"); } catch {}
+    setAuthedUser(null); setWorkout(null); setView("home");
   };
-
-  // Auto-logout on 401
-  useEffect(() => {
-    const handler = () => handleLogout();
-    window.addEventListener("gymtrack-logout", handler);
-    return () => window.removeEventListener("gymtrack-logout", handler);
-  }, []);
 
   if (!authedUser) return <LandingPage onLogin={handleLogin} />;
 
@@ -1171,7 +1170,7 @@ export default function App() {
 
   const navItem = (v, icon, label) => (
     <button onClick={() => { if (v === "log" && !workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView(v); }}
-      style={{ flex: 1, background: "transparent", border: "none", borderTop: view === v ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: view === v ? accent : t.textMuted, padding: "10px 0", transition: "color 0.2s, border-color 0.2s" }}>
+      style={{ flex: 1, background: "transparent", border: "none", borderTop: view === v ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: view === v ? accent : t.textMuted, padding: "10px 0", transition: "color 0.2s", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
       <Icon name={icon} size={20} />
       <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>{label}</span>
     </button>
@@ -1179,12 +1178,12 @@ export default function App() {
 
   return (
     <ThemeCtx.Provider value={theme}>
-    <div style={{ background: t.bg, minHeight: "100vh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative", paddingBottom: 80, transition: "background 0.3s, color 0.3s" }}>
+    <div style={{ background: t.bg, minHeight: "100vh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", transition: "background 0.3s, color 0.3s" }}>
       {finishMsg && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: accent, color: "#000", borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 15, zIndex: 999, boxShadow: "0 4px 20px rgba(232,255,71,0.4)" }}>✓ Workout saved!</div>}
 
       {/* ── HOME ─────────────────────────── */}
       {view === "home" && (
-        <div style={{ padding: "28px 20px 20px" }}>
+        <div style={{ padding: "32px 20px 20px" }}>
           <div style={{ marginBottom: 28 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 38, letterSpacing: 2, lineHeight: 1 }}>GYM<span style={{ color: accent }}>TRACK</span></div>
@@ -1198,7 +1197,7 @@ export default function App() {
               { label: "This Week", value: data.workouts.filter(w => (new Date() - new Date(w.date)) / 86400000 <= 7).length },
               { label: "Exercises", value: [...new Set(data.workouts.flatMap(w => w.exercises.map(e => e.name)))].length },
             ].map(s => (
-              <div key={s.label} style={{ ...S.card(), textAlign: "center", padding: "14px 8px", marginBottom: 0, borderTop: `2px solid ${accent}44` }}>
+              <div key={s.label} style={{ ...S.card(), textAlign: "center", padding: "14px 8px", marginBottom: 0 }}>
                 <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, color: accent, lineHeight: 1 }}>{s.value}</div>
                 <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
               </div>
@@ -1208,28 +1207,15 @@ export default function App() {
           {data.workouts.length > 0 && (
             <>
               <div style={{ color: t.textMuted, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Recent</div>
-              {data.workouts.slice(0, 5).map((w, i) => {
-                const wLabels = w.labels || (w.label ? [w.label] : []);
-                const wCfgs = wLabels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
-                return (
-                  <div key={i} style={S.card()}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div style={{ fontWeight: 600, fontSize: 15 }}>{formatDate(w.date)}</div>
-                      <div style={{ color: t.textMuted, fontSize: 13 }}>{w.duration}min</div>
-                    </div>
-                    <div style={{ color: t.textSub, fontSize: 13, marginTop: 4 }}>{w.exercises.map(e => e.name).join(", ")}</div>
-                    {wCfgs.length > 0 && (
-                      <div style={{ display: "flex", gap: 5, marginTop: 8, flexWrap: "wrap" }}>
-                        {wCfgs.map(c => (
-                          <span key={c.id} style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.color, borderRadius: 5, padding: "2px 7px", fontSize: 11, fontWeight: 700 }}>
-                            {c.emoji} {c.label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+              {data.workouts.slice(0, 5).map((w, i) => (
+                <div key={i} style={S.card()}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{formatDate(w.date)}</div>
+                    <div style={{ color: t.textMuted, fontSize: 13 }}>{w.duration}min</div>
                   </div>
-                );
-              })}
+                  <div style={{ color: t.textSub, fontSize: 13, marginTop: 4 }}>{w.exercises.map(e => e.name).join(", ")}</div>
+                </div>
+              ))}
             </>
           )}
           {data.workouts.length === 0 && <div style={{ textAlign: "center", padding: "40px 0", color: t.textMuted }}><div style={{ fontSize: 15 }}>No workouts yet</div><div style={{ fontSize: 13, marginTop: 4 }}>Hit the button above to get started</div></div>}
@@ -1238,7 +1224,7 @@ export default function App() {
 
       {/* ── LOG ──────────────────────────── */}
       {view === "log" && (
-        <div style={{ padding: "28px 20px 20px" }}>
+        <div style={{ padding: "24px 20px 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
             <div>
               <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1, lineHeight: 1 }}>Today's <span style={{ color: accent }}>Lift</span></div>
@@ -1316,7 +1302,7 @@ export default function App() {
 
       {/* ── HISTORY ──────────────────────── */}
       {view === "history" && (
-        <div style={{ padding: "28px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "28px" }}>
+        <div style={{ padding: "24px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
             <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1 }}>Workout <span style={{ color: accent }}>History</span></div>
             <div style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 4 }}>
@@ -1354,7 +1340,7 @@ export default function App() {
           {/* Export — fixed above nav bar */}
           {data.workouts.length > 0 && (
             <div style={{
-              position: "fixed", bottom: 62, left: "50%", transform: "translateX(-50%)",
+              position: "fixed", bottom: "calc(62px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
               width: "100%", maxWidth: 420, display: "flex", justifyContent: "center",
               padding: "10px 20px", boxSizing: "border-box",
               background: `linear-gradient(to top, ${t.bg} 60%, transparent)`,
@@ -1387,7 +1373,7 @@ export default function App() {
 
       {/* ── PROGRESS ─────────────────────── */}
       {view === "progress" && (
-        <div style={{ padding: "28px 20px" }}>
+        <div style={{ padding: "24px 20px" }}>
           <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Your <span style={{ color: accent }}>Progress</span></span>
             <HelpBtn page="progress" onOpen={() => setHelpPage("progress")} />
@@ -1461,7 +1447,7 @@ export default function App() {
               <div>
                 <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1, lineHeight: 1 }}>My <span style={{ color: accent }}>Profile</span></div>
                 {p.firstName && <div style={{ color: t.textSub, fontSize: 14, marginTop: 5 }}>Hey, <span style={{ color: t.text, fontWeight: 600 }}>{p.firstName}</span> 👋</div>}
-                {isAdmin && (
+                {isAdminUser(authedUser) && (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: accent, color: "#000", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, marginTop: 6, letterSpacing: 0.5 }}>
                     ⚙ ADMIN
                   </div>
@@ -1491,8 +1477,8 @@ export default function App() {
                 <div style={{ marginBottom: 12 }}>
                   <label style={lbl}>Email</label>
                   <div style={{ position: "relative" }}>
-                    <input type="email" value={draft.email || userInfo.email || ""} onChange={e => setDraft("email", e.target.value)} placeholder="your@email.com" style={pField} />
-                    {userInfo.verified && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#5bb85b", fontWeight: 700 }}>✓</span>}
+                    <input type="email" value={draft.email || getUsers()[authedUser]?.email || ""} onChange={e => setDraft("email", e.target.value)} placeholder="your@email.com" style={pField} />
+                    {getUsers()[authedUser]?.verified && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#5bb85b", fontWeight: 700 }}>✓</span>}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -1534,7 +1520,7 @@ export default function App() {
                 </div>
 
                 {/* ── Security Settings ── */}
-                <SecuritySettings authedUser={authedUser} currentEmail={userInfo.email} />
+                <SecuritySettings authedUser={authedUser} />
 
               </div>
             ) : (
@@ -1547,8 +1533,8 @@ export default function App() {
                     ))}
                   </div>
                   {(() => {
-                    const em = p.email || userInfo.email;
-                    const ver = userInfo.verified;
+                    const em = p.email || getUsers()[authedUser]?.email;
+                    const ver = getUsers()[authedUser]?.verified;
                     return em ? (
                       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${t.border}` }}>
                         <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Email</div>
@@ -1607,7 +1593,7 @@ export default function App() {
       })()}
 
       {/* ── ADMIN PANEL ──────────────────── */}
-      {view === "admin" && isAdmin && <AdminPanel currentUser={authedUser} />}
+      {view === "admin" && isAdminUser(authedUser) && <AdminPanel currentUser={authedUser} />}
 
       {/* ── HELP MODAL ───────────────────── */}
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
@@ -1615,7 +1601,7 @@ export default function App() {
       {/* ── SIGN OUT — fixed above nav on profile tab ── */}
       {view === "profile" && (
         <div style={{
-          position: "fixed", bottom: 62, left: "50%", transform: "translateX(-50%)",
+          position: "fixed", bottom: "calc(62px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
           width: "100%", maxWidth: 420, display: "flex", justifyContent: "center",
           padding: "12px 20px", boxSizing: "border-box",
           background: `linear-gradient(to top, ${t.bg} 55%, transparent)`,
@@ -1637,13 +1623,13 @@ export default function App() {
       )}
 
       {/* ── NAV ──────────────────────────── */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: t.navBg, borderTop: `1px solid ${t.navBorder}`, display: "flex" }}>
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: t.navBg, borderTop: `1px solid ${t.navBorder}`, display: "flex", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {navItem("home", "home", "Home")}
         {navItem("log", "plus", "Log")}
         {navItem("history", "history", "History")}
         {navItem("progress", "chart", "Progress")}
         {navItem("profile", "user", "Profile")}
-        {isAdmin && navItem("admin", "shield", "Admin")}
+        {isAdminUser(authedUser) && navItem("admin", "shield", "Admin")}
       </div>
     </div>
     </ThemeCtx.Provider>
