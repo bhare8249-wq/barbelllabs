@@ -580,9 +580,9 @@ function LineChart({ points, lineColor = accent, allTimeMax }) {
 function Big3PRs({ workouts }) {
   const t = useT();
   const cfg = {
-    "Bench Press": { emoji: "🏋️", color: "#5b9bd5", borderColor: "#1a3a5a", bgColor: "rgba(58,111,168,0.1)" },
-    "Squat":       { emoji: "🦵", color: "#5bb85b", borderColor: "#1a3a1a", bgColor: "rgba(74,122,74,0.1)" },
-    "Deadlift":    { emoji: "⚡", color: "#d55b5b", borderColor: "#3a1a1a", bgColor: "rgba(138,58,58,0.1)" },
+    "Bench Press": { label: "BP",  color: "#5B9BD5", borderColor: "#1e3a52", bgColor: "rgba(91,155,213,0.08)" },
+    "Squat":       { label: "SQ",  color: "#A8C8E8", borderColor: "#1e2e3a", bgColor: "rgba(168,200,232,0.07)" },
+    "Deadlift":    { label: "DL",  color: "#7aafd4", borderColor: "#1a2e40", bgColor: "rgba(122,175,212,0.07)" },
   };
   const getPR = (name) => {
     const ws = workouts.flatMap(w => w.exercises.filter(e => e.name === name).flatMap(e => e.sets)).map(s => parseFloat(s.weight)).filter(v => !isNaN(v) && v > 0);
@@ -603,7 +603,7 @@ function Big3PRs({ workouts }) {
           return (
             <div key={name} style={{ background: c.bgColor, border: `1px solid ${pr ? c.borderColor : t.border}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, position: "relative", overflow: "hidden" }}>
               {pr && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: c.color, borderRadius: "14px 0 0 14px" }} />}
-              <div style={{ width: 46, height: 46, borderRadius: 12, background: `${c.color}22`, border: `1px solid ${c.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{c.emoji}</div>
+              <div style={{ width: 46, height: 46, borderRadius: 12, background: `${c.color}18`, border: `1px solid ${c.color}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1, color: c.color }}>{c.label}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{name}</div>
                 {pr
@@ -615,7 +615,7 @@ function Big3PRs({ workouts }) {
               {pr && (
                 <div style={{ textAlign: "center", flexShrink: 0 }}>
                   <div style={{ fontSize: 20, marginBottom: 2 }}>👑</div>
-                  <div style={{ background: isTop ? "#ff9500" : "#333", color: isTop ? "#ffffff" : "#aaa", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>{isTop ? "TOP PR" : "PR"}</div>
+                  <div style={{ background: isTop ? accent : t.surfaceHov, color: isTop ? "#ffffff" : t.textMuted, borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>{isTop ? "TOP PR" : "PR"}</div>
                 </div>
               )}
             </div>
@@ -1596,12 +1596,12 @@ export default function App() {
         <div style={{ padding: "24px 20px 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
             <div>
-              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1, lineHeight: 1 }}>Today's <span style={{ color: accent }}>Lift</span></div>
-              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 3 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1.5, lineHeight: 1 }}>TODAY'S <span style={{ color: accent }}>LIFT</span></div>
+              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 13, color: t.textSub }}>⏱ {Math.round((Date.now() - workout.startTime) / 60000)}min</div>}
-              <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 13, color: t.textSub, cursor: "pointer", fontWeight: 600 }}>🏋️ Plates</button>
+              {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: t.textMuted, letterSpacing: 0.3 }}>{Math.round((Date.now() - workout.startTime) / 60000)} min</div>}
+              <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3 }}>Plates</button>
               <HelpBtn page="log" onOpen={() => setHelpPage("log")} />
             </div>
           </div>
@@ -1613,8 +1613,8 @@ export default function App() {
             <button onClick={() => {
               const last = data.workouts[0];
               setWorkout(w => ({ ...w, exercises: last.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) }));
-            }} style={{ width: "100%", background: t.surfaceHigh, border: `1px dashed ${accent}55`, borderRadius: 14, color: t.textSub, padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14, touchAction: "manipulation" }}>
-              <span style={{ fontSize: 16 }}>↩</span> Repeat Last Session
+            }} style={{ width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, color: t.textSub, padding: "13px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14, touchAction: "manipulation", letterSpacing: 0.3 }}>
+              <Icon name="history" size={14} /> Repeat Last Session
             </button>
           )}
 
@@ -1683,30 +1683,29 @@ export default function App() {
       {/* ── HISTORY ──────────────────────── */}
       {view === "history" && (
         <div style={{ padding: "24px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1 }}>Workout <span style={{ color: accent }}>History</span></div>
-            <div style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 4 }}>
-              {data.workouts.length > 0 && (
-                <div style={{ position: "relative" }}>
-                  <select defaultValue="" onChange={e => {
-                    const days = parseInt(e.target.value); if (!days) return;
-                    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
-                    const idx = data.workouts.findIndex(w => new Date(w.date) >= cutoff);
-                    if (idx !== -1) { const el = document.getElementById(`hcard-${idx}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
-                    e.target.value = "";
-                  }} style={sel()}>
-                    <option value="" disabled>Jump to…</option>
-                    <option value="7"  style={{ background: t.surfaceHigh, color: t.text }}>Last 7 days</option>
-                    <option value="14" style={{ background: t.surfaceHigh, color: t.text }}>Last 14 days</option>
-                    <option value="21" style={{ background: t.surfaceHigh, color: t.text }}>Last 21 days</option>
-                  </select>
-                  <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: accent, display: "flex" }}><Icon name="chevronDown" size={12} /></span>
-                </div>
-              )}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1 }}>WORKOUT <span style={{ color: accent }}>HISTORY</span></div>
               <HelpBtn page="history" onOpen={() => setHelpPage("history")} />
             </div>
+            {data.workouts.length > 0 && (
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <select defaultValue="" onChange={e => {
+                  const days = parseInt(e.target.value); if (!days) return;
+                  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+                  const idx = data.workouts.findIndex(w => new Date(w.date) >= cutoff);
+                  if (idx !== -1) { const el = document.getElementById(`hcard-${idx}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+                  e.target.value = "";
+                }} style={sel({ fontSize: 11 })}>
+                  <option value="" disabled>Jump to…</option>
+                  <option value="7"  style={{ background: t.surfaceHigh, color: t.text }}>Last 7 days</option>
+                  <option value="14" style={{ background: t.surfaceHigh, color: t.text }}>Last 14 days</option>
+                  <option value="21" style={{ background: t.surfaceHigh, color: t.text }}>Last 21 days</option>
+                </select>
+                <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: accent, display: "flex" }}><Icon name="chevronDown" size={12} /></span>
+              </div>
+            )}
           </div>
-          <div style={{ color: t.textMuted, fontSize: 12, marginBottom: 18 }}>Tap any session to expand, tag, or delete it</div>
           {data.workouts.length === 0 && <div style={{ textAlign: "center", color: t.textMuted, padding: 40 }}>No history yet</div>}
           {data.workouts.map((w, i) => (
             <div key={i} id={`hcard-${i}`} style={{ scrollMarginTop: 16 }}>
@@ -1733,11 +1732,12 @@ export default function App() {
                   background: t.surfaceHigh,
                   border: `1px solid ${t.border}`,
                   color: t.textSub,
-                  borderRadius: 10,
+                  borderRadius: 20,
                   padding: "11px 28px",
                   fontSize: 13,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   cursor: "pointer",
+                  letterSpacing: 0.3,
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
@@ -1754,8 +1754,8 @@ export default function App() {
       {/* ── PROGRESS ─────────────────────── */}
       {view === "progress" && (
         <div style={{ padding: "24px 20px" }}>
-          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Your <span style={{ color: accent }}>Progress</span></span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1 }}>YOUR <span style={{ color: accent }}>PROGRESS</span></div>
             <HelpBtn page="progress" onOpen={() => setHelpPage("progress")} />
           </div>
           <Big3PRs workouts={data.workouts} />
