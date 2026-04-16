@@ -641,10 +641,16 @@ function DualLineChart({ points, lineColor = WEIGHT_COLOR, allTimeMax }) {
                     </g>
                   );
                 })()}
-                {/* X-axis date labels */}
-                {(points.length <= 6 || i === 0 || i === points.length-1 || i % Math.ceil(points.length/5) === 0) && (
-                  <text x={cx} y={H-4} textAnchor="middle" fontSize="9" fill={t.textMuted}
-                    transform={points.length > 8 ? `rotate(-35,${cx},${H-4})` : ""}>{formatDay(p.date)}</text>
+                {/* X-axis date labels — max 5, evenly spaced */}
+                {(() => {
+                  const n = points.length;
+                  if (n <= 1) return true;
+                  const slots = Math.min(5, n);
+                  const step = (n - 1) / (slots - 1);
+                  const shown = Array.from({ length: slots }, (_, k) => Math.round(k * step));
+                  return shown.includes(i);
+                })() && (
+                  <text x={cx} y={H-4} textAnchor="middle" fontSize="9" fill={t.textMuted}>{formatDay(p.date)}</text>
                 )}
               </g>
             );
@@ -1677,9 +1683,9 @@ export default function App() {
         const displayName = profile.firstName || authedUser;
         const streak = calcStreak(data.workouts);
         const statsRow = [
-          { label: "Total", value: data.workouts.length, icon: "🏋️" },
-          { label: "This week", value: data.workouts.filter(w => (new Date() - new Date(w.date)) / 86400000 <= 7).length, icon: "🗓" },
-          { label: "Exercises", value: [...new Set(data.workouts.flatMap(w => w.exercises.map(e => e.name)))].length, icon: "📋" },
+          { label: "Total", value: data.workouts.length, icon: "🏋️", color: "#5B9BD5" },
+          { label: "This week", value: data.workouts.filter(w => (new Date() - new Date(w.date)) / 86400000 <= 7).length, icon: "🗓", color: "#ff9500" },
+          { label: "Exercises", value: [...new Set(data.workouts.flatMap(w => w.exercises.map(e => e.name)))].length, icon: "📋", color: "#5bb85b" },
         ];
         return (
           <div style={{ padding: "48px 20px 20px" }}>
@@ -1705,9 +1711,9 @@ export default function App() {
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
               {statsRow.map(s => (
-                <div key={s.label} style={{ background: t.surfaceHigh, borderRadius: 16, padding: "16px 8px 14px", textAlign: "center", border: `1px solid ${t.border}`, borderTop: `2px solid ${accent}`, boxShadow: `0 4px 20px rgba(0,0,0,0.25)` }}>
+                <div key={s.label} style={{ background: t.surfaceHigh, borderRadius: 16, padding: "16px 8px 14px", textAlign: "center", border: `1px solid ${t.border}`, borderTop: `2px solid ${s.color}`, boxShadow: `0 4px 20px rgba(0,0,0,0.25)` }}>
                   <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
-                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: accent, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: s.color, lineHeight: 1 }}>{s.value}</div>
                   <div style={{ fontSize: 10, color: t.textMuted, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>{s.label}</div>
                 </div>
               ))}
