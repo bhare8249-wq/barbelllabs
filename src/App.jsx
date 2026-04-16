@@ -116,7 +116,7 @@ const makeStyles = (t) => ({
 // v1.2.1  2026-04-08  Profile: Security Settings added — change email and password with verification flow
 // v1.2.2  2026-04-08  Fixed critical bug: useStorage useEffect was resetting user data on profile edits
 // v2.0.0  2026-04-16  Rebranded to Rep Set. Steel Blue colour system. Visual overhaul. 1RM estimator, exercise notes, plate calculator.
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.3.3";
 const BUILD_DATE  = "2026-04-16";
 
 const getUserKey = (u) => `gymtrack-data-${u}`;
@@ -2184,3 +2184,5 @@ export default function App() {
     </ThemeCtx.Provider>
   );
 }
+
+
