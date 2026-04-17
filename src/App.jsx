@@ -61,8 +61,9 @@ const makeStyles = (t) => ({
   }),
   iconBtn: (color) => ({
     background: "transparent", border: "none", cursor: "pointer",
-    color: color || t.textMuted, padding: 8, display: "flex", alignItems: "center",
-    borderRadius: 10, transition: "opacity 0.15s",
+    color: color || t.textMuted, padding: 10, display: "flex", alignItems: "center",
+    justifyContent: "center", borderRadius: 10, transition: "opacity 0.15s",
+    minWidth: 40, minHeight: 40, touchAction: "manipulation",
   }),
   ghostBtn: (extra = {}) => ({
     display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "transparent",
@@ -117,7 +118,7 @@ const makeStyles = (t) => ({
 // v1.2.1  2026-04-08  Profile: Security Settings added — change email and password with verification flow
 // v1.2.2  2026-04-08  Fixed critical bug: useStorage useEffect was resetting user data on profile edits
 // v2.0.0  2026-04-16  Rebranded to Rep Set. Steel Blue colour system. Visual overhaul. 1RM estimator, exercise notes, plate calculator.
-const APP_VERSION = "0.3.8";
+const APP_VERSION = "0.3.9";
 const BUILD_DATE  = "2026-04-16";
 
 const getUserKey = (u) => `gymtrack-data-${u}`;
@@ -218,53 +219,47 @@ const HELP_CONTENT = {
     title: "Home",
     emoji: "🏠",
     sections: [
-      { heading: "Overview", body: "The Home screen is your dashboard. It shows your total workout count, sessions this week, and the number of unique exercises you've logged." },
-      { heading: "Start Workout", body: "Tap '+ Start Workout' to jump to the Log tab and begin a new session. The timer starts automatically when you add your first exercise." },
-      { heading: "Recent Sessions", body: "Your last 5 workouts are listed here for a quick reference — date, duration, and exercises performed." },
+      { heading: "Quick Stats", body: "See your total workouts, this-week count, and unique exercises at a glance." },
+      { heading: "Start a Session", body: "Tap '+ Start Workout' to jump into the Log tab. The timer starts on your first set." },
+      { heading: "Settings", body: "Tap the gear ⚙ in the top right to toggle dark/light mode and manage your account." },
     ],
   },
   log: {
     title: "Log",
     emoji: "📋",
     sections: [
-      { heading: "Rest Timer", body: "Use the built-in rest timer between sets. Choose a preset (30s, 1m, 1.5m, 2m, 3m), tap Start, and a ring counts down. It turns green and shows 'Rest complete!' when done." },
-      { heading: "Load Previous Workout", body: "If you've tagged past sessions, a dropdown lets you reload the exercises and sets from that template — great for repeating a routine." },
-      { heading: "Adding Exercises", body: "Tap 'Add Exercise' to search the built-in list or type any custom name to create your own. Exercises you add are remembered for future sessions." },
-      { heading: "Logging Sets", body: "For each exercise, enter weight (lbs) and reps per set. Tap '+ Add Set' to add more sets. Use the × to remove any set or the trash icon to remove the whole exercise." },
-      { heading: "Finishing", body: "When done, tap 'Finish Workout' to save the session. Duration is calculated automatically from when you started." },
+      { heading: "Add an Exercise", body: "Tap 'Add Exercise', then search or type a custom name. Custom exercises stick around for next time." },
+      { heading: "Log Your Sets", body: "Enter weight and reps, tap '+ Add Set' for more. Tap × to remove a set." },
+      { heading: "Rest Timer", body: "Pick a preset (30s–3m) and tap Start between sets. The ring turns green when rest is done." },
+      { heading: "Reuse Past Workouts", body: "If you've tagged sessions in History, load them here as a template." },
     ],
   },
   history: {
     title: "History",
     emoji: "📅",
     sections: [
-      { heading: "Browsing Sessions", body: "All your workouts are listed newest first. Tap any card to expand it and see the full exercise breakdown with all sets and reps." },
-      { heading: "Tagging Workouts", body: "When a card is expanded, tap up to 3 tags (e.g. Legs, Push, Pull) to categorise the session. Tags appear as coloured badges on the collapsed card." },
-      { heading: "Jump To", body: "Use the 'Jump to…' dropdown to scroll instantly to workouts from the last 7, 14, or 21 days." },
-      { heading: "Deleting Workouts", body: "Expand any card and tap 'Delete Workout'. A confirmation prompt appears before the session is permanently removed." },
-      { heading: "Export Data", body: "Tap 'Export' to download all your workout data as a CSV file — includes date, exercise, set number, weight, reps, and tags." },
+      { heading: "Tap to Expand", body: "Tap any workout card to see every set, rep, and weight from that session." },
+      { heading: "Tag Your Sessions", body: "Add up to 3 tags (Push, Legs, Pull…) so you can reload them as templates in Log." },
+      { heading: "Export CSV", body: "Tap 'Export' to download all your data as a spreadsheet." },
     ],
   },
   progress: {
     title: "Progress",
     emoji: "📈",
     sections: [
-      { heading: "Big 3 Personal Records", body: "At the top you'll see your all-time heaviest lift for Bench Press, Squat, and Deadlift. The heaviest overall gets a 'TOP PR' badge. All PRs show a 👑 crown." },
-      { heading: "Exercise Progression Charts", body: "Every exercise you've logged gets its own line graph — X axis is days, Y axis is your best weight for that session. Hover over any data point to see the exact weight and date." },
-      { heading: "PR Highlight", body: "The session where you hit your all-time PR is marked with an orange dot and a 👑 crown on the chart." },
-      { heading: "Gain / Loss Indicator", body: "Below each chart, a ▲ green or ▼ red indicator shows your net weight change from your first to most recent session for that exercise." },
-      { heading: "Jump To", body: "Use the 'Jump to…' dropdown at the top right to scroll directly to any exercise chart." },
+      { heading: "Your Big 3 PRs", body: "Bench, Squat, and Deadlift records sit up top. The heaviest gets a 'TOP PR' badge." },
+      { heading: "Scrub the Chart", body: "Touch and drag across any graph to scrub through sessions and see exact weight, reps, and date." },
+      { heading: "The Crown 👑", body: "The orange crown marks your current PR — based on weight AND reps at that weight." },
+      { heading: "Jump To", body: "Use the dropdown at the top to jump to any exercise chart." },
     ],
   },
   profile: {
     title: "Profile",
     emoji: "👤",
     sections: [
-      { heading: "Personal Info", body: "Store your first and last name, email, age, weight, and height. Tap 'Edit' to update any field, then 'Save Profile' to confirm." },
-      { heading: "Current Goal", body: "Choose from Build Muscle, Strength, Cardio, Cut / Lean Out, or Maintain. Your selected goal is highlighted and visible on the profile view." },
-      { heading: "Dark / Light Mode", body: "Toggle between dark and light themes using the sun/moon button. Your preference is saved and applied across the whole app." },
-      { heading: "Lifetime Stats", body: "A summary of your total workouts, unique exercises, total sets logged, and sessions this week — all calculated live from your data." },
-      { heading: "Sign Out", body: "Tap 'Sign Out' to return to the login screen. Your data is saved and will be available when you sign back in." },
+      { heading: "Personal Info", body: "Tap 'Edit' to update your name, age, weight, height, and goal. Save when you're done." },
+      { heading: "Goals", body: "Pick a training goal (Muscle, Strength, Cardio, Cut, Maintain) — it's shown on your profile." },
+      { heading: "Lifetime Stats", body: "See your total workouts, sets, exercises, and weekly activity, calculated live." },
     ],
   },
   manual: {
@@ -470,14 +465,14 @@ function RestTimer() {
                 background: seconds === p && !running && !isCustomActive ? accent : t.inputBg,
                 color: seconds === p && !running && !isCustomActive ? "#ffffff" : t.textSub,
                 border: `1px solid ${seconds === p && !running && !isCustomActive ? accent : t.border}`,
-                borderRadius: 7, padding: "4px 9px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", minHeight: 36, touchAction: "manipulation",
               }}>{p >= 60 ? `${p/60}m` : `${p}s`}</button>
             ))}
             <button onClick={() => setShowCustom(v => !v)} style={{
               background: isCustomActive ? accent : t.inputBg,
               color: isCustomActive ? "#ffffff" : t.textSub,
               border: `1px solid ${isCustomActive ? accent : t.border}`,
-              borderRadius: 7, padding: "4px 9px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", minHeight: 36, touchAction: "manipulation",
             }}>Custom</button>
           </div>
 
@@ -507,10 +502,10 @@ function RestTimer() {
           {/* Controls */}
           <div style={{ display: "flex", gap: 8 }}>
             {!running
-              ? <button onClick={start} style={{ ...S.solidBtn(), flex: 1, padding: "8px 0", fontSize: 13, borderRadius: 8 }}>{remaining != null ? "Resume" : "Start"}</button>
-              : <button onClick={() => setRunning(false)} style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.border}`, color: t.text, borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Pause</button>
+              ? <button onClick={start} style={{ ...S.solidBtn(), flex: 1, padding: "11px 0", fontSize: 14, borderRadius: 10, minHeight: 42 }}>{remaining != null ? "Resume" : "Start"}</button>
+              : <button onClick={() => setRunning(false)} style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.border}`, color: t.text, borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 42, touchAction: "manipulation" }}>Pause</button>
             }
-            <button onClick={stop} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Reset</button>
+            <button onClick={stop} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 10, padding: "11px 16px", fontSize: 14, cursor: "pointer", minHeight: 42, touchAction: "manipulation" }}>Reset</button>
           </div>
         </div>
       </div>
@@ -931,7 +926,7 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
                   {WORKOUT_LABELS.map(l => {
                     const isActive = activeLabels.includes(l.id);
                     return (
-                      <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= 3) ? 0.4 : 1 }}>
+                      <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 10, padding: "9px 14px", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= 3) ? 0.4 : 1, minHeight: 38, touchAction: "manipulation" }}>
                         {l.emoji} {l.label}{isActive && <span style={{ fontSize: 10, marginLeft: 1, opacity: 0.7 }}>✕</span>}
                       </button>
                     );
@@ -1829,7 +1824,7 @@ export default function App() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: t.textMuted, letterSpacing: 0.3 }}>{Math.round((Date.now() - workout.startTime) / 60000)} min</div>}
-              <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3 }}>Plates</button>
+              <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3, minHeight: 36, touchAction: "manipulation" }}>Plates</button>
               <HelpBtn page="log" onOpen={() => setHelpPage("log")} />
             </div>
           </div>
@@ -1890,8 +1885,8 @@ export default function App() {
                 <button onClick={() => setShowExPicker(false)} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
               <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                {filtered.map(name => <button key={name} onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(name); }} style={{ display: "block", width: "100%", background: "transparent", border: "none", color: t.textSub, textAlign: "left", padding: "9px 6px", cursor: "pointer", fontSize: 14, borderBottom: `1px solid ${t.border}` }}>{name}</button>)}
-                {exSearch && !filtered.find(e => e.toLowerCase() === exSearch.toLowerCase()) && <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(exSearch); }} style={{ display: "block", width: "100%", background: "transparent", border: "none", color: accent, textAlign: "left", padding: "9px 6px", cursor: "pointer", fontSize: 14 }}>+ Add "{exSearch}"</button>}
+                {filtered.map(name => <button key={name} onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(name); }} style={{ display: "block", width: "100%", background: "transparent", border: "none", color: t.textSub, textAlign: "left", padding: "14px 10px", cursor: "pointer", fontSize: 15, borderBottom: `1px solid ${t.border}`, minHeight: 48, touchAction: "manipulation" }}>{name}</button>)}
+                {exSearch && !filtered.find(e => e.toLowerCase() === exSearch.toLowerCase()) && <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(exSearch); }} style={{ display: "block", width: "100%", background: "transparent", border: "none", color: accent, textAlign: "left", padding: "14px 10px", cursor: "pointer", fontSize: 15, minHeight: 48, fontWeight: 600, touchAction: "manipulation" }}>+ Add "{exSearch}"</button>}
               </div>
             </div>
           ) : (
