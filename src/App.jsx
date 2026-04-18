@@ -1,4 +1,18 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { auth, googleProvider } from "./firebase";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  sendEmailVerification,
+  signInWithPopup,
+  updateEmail,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+} from "firebase/auth";
 
 // ── Theme ─────────────────────────────────────────────────────────────
 const ThemeCtx = createContext("dark");
@@ -121,13 +135,8 @@ const makeStyles = (t) => ({
 const APP_VERSION = "0.3.10";
 const BUILD_DATE  = "2026-04-16";
 
-const getUserKey = (u) => `gymtrack-data-${u}`;
-const AUTH_KEY = "gymtrack-auth";
-const getUsers = () => { try { return JSON.parse(localStorage.getItem(AUTH_KEY) || "{}"); } catch { return {}; } };
-const saveUsers = (u) => { try { localStorage.setItem(AUTH_KEY, JSON.stringify(u)); } catch {} };
-
-function useStorage(username) {
-  const key = getUserKey(username || "__guest__");
+function useStorage(uid) {
+  const key = `gymtrack-data-${uid || "__guest__"}`;
   const [data, setData] = useState(() => {
     try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : { workouts: [], bodyweight: [] }; }
     catch { return { workouts: [], bodyweight: [] }; }
@@ -137,21 +146,12 @@ function useStorage(username) {
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────
-const ADMIN_USER = "admin";
-const ADMIN_HASH = btoa("1.Billion*");
+const isAdminUser = () => false;
 
-// Seed admin account into localStorage if it doesn't exist
 (() => {
   try {
-    const users = getUsers();
-    if (!users[ADMIN_USER]) {
-      users[ADMIN_USER] = { passwordHash: ADMIN_HASH, email: "admin@repset.app", verified: true, isAdmin: true };
-      saveUsers(users);
-    }
   } catch {}
 })();
-
-const isAdminUser = (u) => u === ADMIN_USER;
 
 
 const BIG3 = ["Bench Press", "Squat", "Deadlift"];
@@ -1176,7 +1176,7 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete }) {
 }
 
 // ── Security Settings Component ───────────────────────────────────────
-function SecuritySettings({ authedUser }) {
+function SecuritySettings() {
   const t = useT();
   const [showSecurity, setShowSecurity] = useState(false);
   const [secTab, setSecTab] = useState("email");
@@ -1198,49 +1198,49 @@ function SecuritySettings({ authedUser }) {
   ];
   const pwValid = pwRules.every(r => r.ok);
 
-  const handleEmailChange = () => {
-    const users = getUsers();
-    const user = users[authedUser];
+  const handleEmailChange = async () => {
     if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
       setSecMsg({ type: "error", text: "Please enter a valid email address." }); return;
     }
-    if (newEmail === user.email) {
+    if (newEmail === auth.currentUser?.email) {
       setSecMsg({ type: "error", text: "That's already your current email." }); return;
     }
-    if (Object.entries(users).some(([u, d]) => u !== authedUser && d.email === newEmail)) {
-      setSecMsg({ type: "error", text: "That email is already linked to another account." }); return;
+    try {
+      await updateEmail(auth.currentUser, newEmail);
+      await sendEmailVerification(auth.currentUser);
+      setSecVerify(true);
+      setSecMsg({ type: "success", text: `Verification sent to ${newEmail}` });
+    } catch (err) {
+      if (err.code === "auth/requires-recent-login") {
+        setSecMsg({ type: "error", text: "Please sign out and sign back in before changing your email." });
+      } else {
+        setSecMsg({ type: "error", text: err.message });
+      }
     }
-    users[authedUser] = { ...user, email: newEmail, verified: false };
-    saveUsers(users);
-    setSecVerify(true);
-    setSecMsg({ type: "success", text: `Verification sent to ${newEmail}` });
   };
 
-  const handlePasswordChange = () => {
-    const users = getUsers();
-    const user = users[authedUser];
-    if (user.passwordHash !== btoa(currentPw)) {
-      setSecMsg({ type: "error", text: "Current password is incorrect." }); return;
+  const handlePasswordChange = async () => {
+    if (!pwValid) { setSecMsg({ type: "error", text: "New password doesn't meet all requirements." }); return; }
+    if (newPw !== confirmPw) { setSecMsg({ type: "error", text: "Passwords do not match." }); return; }
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPw);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, newPw);
+      setSecMsg({ type: "success", text: "Password updated successfully." });
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+    } catch (err) {
+      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setSecMsg({ type: "error", text: "Current password is incorrect." });
+      } else {
+        setSecMsg({ type: "error", text: err.message });
+      }
     }
-    if (!pwValid) {
-      setSecMsg({ type: "error", text: "New password doesn't meet all requirements." }); return;
-    }
-    if (newPw !== confirmPw) {
-      setSecMsg({ type: "error", text: "Passwords do not match." }); return;
-    }
-    users[authedUser] = { ...user, passwordHash: btoa(newPw), verified: false };
-    saveUsers(users);
-    setSecVerify(true);
-    setSecMsg({ type: "success", text: `Confirmation sent to ${user.email}` });
   };
 
   const confirmVerified = () => {
-    const users = getUsers();
-    users[authedUser].verified = true;
-    saveUsers(users);
     setSecVerify(false); setShowSecurity(false);
     setNewEmail(""); setCurrentPw(""); setNewPw(""); setConfirmPw("");
-    setSecMsg({ type: "success", text: secTab === "email" ? "Email updated and verified." : "Password updated and verified." });
+    setSecMsg({ type: "success", text: "Email updated. Please verify your inbox." });
   };
 
   if (secVerify) return (
@@ -1248,12 +1248,10 @@ function SecuritySettings({ authedUser }) {
       <div style={{ fontSize: 36, marginBottom: 10 }}>📬</div>
       <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, color: t.text, marginBottom: 8 }}>Check Your Inbox</div>
       <div style={{ fontSize: 13, color: t.textSub, marginBottom: 16, lineHeight: 1.6 }}>
-        {secTab === "email"
-          ? `A verification link has been sent to ${newEmail}. Click it to confirm your new email address.`
-          : `A confirmation email has been sent to your registered address. Click the link to confirm your new password.`}
+        A verification link has been sent to <strong>{newEmail}</strong>. Click it to confirm your new email address.
       </div>
       <button onClick={confirmVerified} style={{ background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 9, padding: "10px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 8, width: "100%" }}>
-        I've Verified — Continue
+        Done
       </button>
       <button onClick={() => { setSecVerify(false); setSecMsg(null); }} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 9, padding: "8px 24px", fontSize: 13, cursor: "pointer", width: "100%" }}>
         Back
@@ -1284,7 +1282,7 @@ function SecuritySettings({ authedUser }) {
           {secTab === "email" && (
             <div>
               <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
-                Current: <span style={{ color: t.text, fontWeight: 600 }}>{getUsers()[authedUser]?.email || "—"}</span>
+                Current: <span style={{ color: t.text, fontWeight: 600 }}>{auth.currentUser?.email || "—"}</span>
               </div>
               <label style={lbl}>New Email Address</label>
               <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setSecMsg(null); }} placeholder="new@email.com" style={{ ...pField, marginBottom: 12 }} />
@@ -1366,7 +1364,7 @@ function SettingsModal({ authedUser, onClose, toggleTheme }) {
         {/* Security */}
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Account Security</div>
-          <SecuritySettings authedUser={authedUser} />
+          <SecuritySettings />
         </div>
       </div>
     </div>
@@ -1374,145 +1372,38 @@ function SettingsModal({ authedUser, onClose, toggleTheme }) {
 }
 
 // ── Admin Panel ───────────────────────────────────────────────────────
-function AdminPanel({ currentUser }) {
-  const t = useT(); const S = useS();
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const [users, setUsers] = useState(() => getUsers());
-
-  const refresh = () => setUsers(getUsers());
-
-  const deleteUser = (username) => {
-    if (username === ADMIN_USER) return;
-    const u = getUsers();
-    delete u[username];
-    saveUsers(u);
-    try { localStorage.removeItem(getUserKey(username)); } catch {}
-    setConfirmDelete(null);
-    refresh();
-  };
-
-  const getUserStats = (username) => {
-    try {
-      const raw = localStorage.getItem(getUserKey(username));
-      const data = raw ? JSON.parse(raw) : { workouts: [] };
-      return {
-        workouts: data.workouts?.length || 0,
-        exercises: [...new Set((data.workouts || []).flatMap(w => w.exercises?.map(e => e.name) || []))].length,
-        lastSession: data.workouts?.[0]?.date || null,
-      };
-    } catch { return { workouts: 0, exercises: 0, lastSession: null }; }
-  };
-
-  const allUsers = Object.entries(users).sort(([a], [b]) => a === ADMIN_USER ? -1 : b === ADMIN_USER ? 1 : a.localeCompare(b));
-  const totalWorkouts = allUsers.reduce((acc, [u]) => acc + getUserStats(u).workouts, 0);
-
+function AdminPanel() {
+  const t = useT();
   return (
-    <div style={{ padding: "24px 20px 100px" }}>
-      {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span style={{ fontSize: 20 }}>⚙️</span>
-          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 1 }}>
-            Admin <span style={{ color: accent }}>Panel</span>
-          </div>
-        </div>
-        <div style={{ color: t.textMuted, fontSize: 12 }}>Device user management — Rep Set v{APP_VERSION}</div>
-      </div>
-
-      {/* Summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-        {[
-          { label: "Total Users", value: allUsers.length },
-          { label: "Total Workouts", value: totalWorkouts },
-          { label: "Active Accounts", value: allUsers.filter(([u]) => getUserStats(u).workouts > 0).length },
-        ].map(s => (
-          <div key={s.label} style={{ ...S.card(), textAlign: "center", padding: "12px 8px", marginBottom: 0 }}>
-            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 26, color: accent, lineHeight: 1 }}>{s.value}</div>
-            <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* User list */}
-      <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-        Registered Users
-      </div>
-
-      {allUsers.map(([username, info]) => {
-        const stats = getUserStats(username);
-        const isAdmin = username === ADMIN_USER;
-        return (
-          <div key={username} style={{ ...S.card(), marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {/* Avatar */}
-                <div style={{ width: 38, height: 38, borderRadius: "50%", background: isAdmin ? `${accent}22` : t.surfaceHigh, border: `2px solid ${isAdmin ? accent : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, fontWeight: 700, color: isAdmin ? accent : t.text }}>
-                  {username[0].toUpperCase()}
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontWeight: 700, fontSize: 14, color: t.text }}>@{username}</span>
-                    {isAdmin && <span style={{ background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.5 }}>⚙ ADMIN</span>}
-                    {info.verified && <span style={{ background: "rgba(91,184,91,0.12)", border: "1px solid rgba(91,184,91,0.3)", color: "#5bb85b", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 6px" }}>✓</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2 }}>{info.email || "—"}</div>
-                </div>
-              </div>
-              {!isAdmin && (
-                <button onClick={() => setConfirmDelete(username)} style={{ background: "rgba(213,91,91,0.1)", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                  Delete
-                </button>
-              )}
-            </div>
-
-            {/* Stats row */}
-            <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
-              {[
-                { label: "Workouts", val: stats.workouts },
-                { label: "Exercises", val: stats.exercises },
-                { label: "Last Session", val: stats.lastSession ? new Date(stats.lastSession).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—" },
-              ].map(s => (
-                <div key={s.label}>
-                  <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>{s.label}</div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: t.text, marginTop: 2 }}>{s.val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Delete confirm */}
-            {confirmDelete === username && (
-              <div style={{ marginTop: 12, background: "rgba(213,91,91,0.08)", border: "1px solid rgba(213,91,91,0.3)", borderRadius: 8, padding: "12px 14px" }}>
-                <div style={{ color: "#d55b5b", fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-                  Permanently delete @{username} and all their data?
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => deleteUser(username)} style={{ flex: 1, background: "#d55b5b", color: "#fff", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Yes, Delete</button>
-                  <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 7, padding: "8px 0", fontSize: 12, cursor: "pointer" }}>Cancel</button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div style={{ padding: "52px 20px 100px", textAlign: "center" }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>⚙️</div>
+      <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1, marginBottom: 8 }}>Admin <span style={{ color: accent }}>Panel</span></div>
+      <div style={{ color: t.textMuted, fontSize: 14 }}>Coming soon — upgrading to cloud user management.</div>
     </div>
   );
 }
 
-// ── Google Sign In (Coming Soon) ──────────────────────────────────────
-function GoogleSignInButton() {
+// ── Google Sign In ─────────────────────────────────────────────────────
+function GoogleSignInButton({ onError }) {
+  const handleGoogle = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      if (err.code !== "auth/popup-closed-by-user") onError?.(err.message);
+    }
+  };
   return (
     <div style={{ marginBottom: 10 }}>
-      <button disabled style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#ccc", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: 0.45, boxSizing: "border-box" }}>
+      <button onClick={handleGoogle} style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#ccc", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxSizing: "border-box" }}>
         <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
         Continue with Google
       </button>
-      <div style={{ textAlign: "center", fontSize: 10, color: "#444", marginTop: 4 }}>Coming soon</div>
     </div>
   );
 }
 
 // ── Landing Page ──────────────────────────────────────────────────────
-function LandingPage({ onLogin }) {
+function LandingPage({ onNewUser }) {
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -1527,27 +1418,37 @@ function LandingPage({ onLogin }) {
 
   const switchMode = (m) => { setMode(m); setError(""); setUsername(""); setEmail(""); setPassword(""); };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const u = username.trim(), em = email.trim();
     if (mode === "signup") {
       if (!u || !em || !password) { setError("Please fill in all fields."); return; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError("Please enter a valid email address."); return; }
-      const users = getUsers();
-      if (users[u]) { setError("Username already exists."); return; }
-      if (Object.values(users).some(usr => usr.email === em)) { setError("An account with this email already exists."); return; }
       if (password.length < 8)       { setError("Password must be at least 8 characters."); return; }
       if (!/[A-Z]/.test(password))   { setError("Password must include at least 1 uppercase letter."); return; }
       if (!/[a-z]/.test(password))   { setError("Password must include at least 1 lowercase letter."); return; }
       if (!/[0-9]/.test(password))   { setError("Password must include at least 1 digit."); return; }
-      users[u] = { passwordHash: btoa(password), email: em, verified: false };
-      saveUsers(users);
-      setVerifiedEmail(em);
-      setMode("verify");
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, em, password);
+        await updateProfile(cred.user, { displayName: u });
+        await sendEmailVerification(cred.user);
+        setVerifiedEmail(em);
+        setMode("verify");
+        onNewUser?.();
+      } catch (err) {
+        if (err.code === "auth/email-already-in-use") setError("An account with this email already exists.");
+        else setError(err.message);
+      }
     } else {
-      if (!u || !password) { setError("Please fill in all fields."); return; }
-      const users = getUsers();
-      if (!users[u] || users[u].passwordHash !== btoa(password)) { setError("Invalid username or password."); return; }
-      onLogin(u, false);
+      if (!em || !password) { setError("Please fill in all fields."); return; }
+      try {
+        await signInWithEmailAndPassword(auth, em, password);
+      } catch (err) {
+        if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+          setError("Invalid email or password.");
+        } else {
+          setError(err.message);
+        }
+      }
     }
   };
 
@@ -1582,13 +1483,12 @@ function LandingPage({ onLogin }) {
             <div style={{ color: accent, fontSize: 14, fontWeight: 700, marginBottom: 20, wordBreak: "break-all" }}>{verifiedEmail}</div>
             <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px", fontSize: 13, color: "#555", lineHeight: 1.7, marginBottom: 24, textAlign: "left" }}>
               <div style={{ color: "#888", marginBottom: 4, fontWeight: 600 }}>Next steps:</div>
-              <div>1. Open the email from <span style={{ color: "#777" }}>noreply@repset.app</span></div>
-              <div>2. Click the <span style={{ color: accent }}>Activate Account</span> link</div>
+              <div>1. Open the email from Firebase / Barbell Labs</div>
+              <div>2. Click the <span style={{ color: accent }}>Verify Email</span> link</div>
               <div>3. Return here to sign in</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={() => { const users = getUsers(); const u = Object.keys(users).find(k => users[k].email === verifiedEmail); if (u) { users[u].verified = true; saveUsers(users); onLogin(u, true); } }} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 11, padding: 14, fontSize: 16, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: "pointer" }}>I've Verified — Continue</button>
-              <button onClick={() => switchMode("login")} style={{ width: "100%", background: "transparent", color: "#555", border: "1px solid #2a2a2a", borderRadius: 11, padding: 12, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Back to Sign In</button>
+              <button onClick={() => switchMode("login")} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 11, padding: 14, fontSize: 16, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: "pointer" }}>Go to Sign In</button>
             </div>
             <div style={{ marginTop: 16, fontSize: 12, color: "#3a3a3a" }}>Didn't receive it? Check your spam folder</div>
           </div>
@@ -1604,16 +1504,16 @@ function LandingPage({ onLogin }) {
             </div>
             {/* Fields */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 8 }}>
-              <div>
-                <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Username</label>
-                <input value={username} onChange={e => { setUsername(e.target.value); setError(""); }} onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Enter your username" autoComplete="username" style={fStyle} />
-              </div>
               {mode === "signup" && (
                 <div>
-                  <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Email</label>
-                  <input type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Enter your email" autoComplete="email" style={fStyle} />
+                  <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Username</label>
+                  <input value={username} onChange={e => { setUsername(e.target.value); setError(""); }} onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Choose a username" autoComplete="username" style={fStyle} />
                 </div>
               )}
+              <div>
+                <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Email</label>
+                <input type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Enter your email" autoComplete="email" style={fStyle} />
+              </div>
               <div>
                 <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Password</label>
                 <div style={{ position: "relative" }}>
@@ -1650,7 +1550,7 @@ function LandingPage({ onLogin }) {
               <div style={{ flex: 1, height: 1, background: "#2a2a2a" }} />
             </div>
             {/* Google Sign In */}
-            <GoogleSignInButton />
+            <GoogleSignInButton onError={setError} />
             {/* Apple — coming soon */}
             <div style={{ marginBottom: 10 }}>
               <button disabled style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#ccc", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: 0.45, boxSizing: "border-box" }}>
@@ -1662,7 +1562,7 @@ function LandingPage({ onLogin }) {
           </>
         )}
       </div>
-      <div style={{ marginTop: 24, color: "#333", fontSize: 12, textAlign: "center", opacity: animIn ? 1 : 0, transition: "opacity 0.5s ease 0.3s" }}>Data stored locally on this device</div>
+      <div style={{ marginTop: 24, color: "#333", fontSize: 12, textAlign: "center", opacity: animIn ? 1 : 0, transition: "opacity 0.5s ease 0.3s" }}>Your data is securely stored in the cloud</div>
     </div>
   );
 }
@@ -1825,8 +1725,20 @@ function PlateCalculator({ onClose }) {
 
 // ── Main App ──────────────────────────────────────────────────────────
 export default function App() {
-  const [authedUser, setAuthedUser] = useState(() => { try { return sessionStorage.getItem("gymtrack-user") || null; } catch { return null; } });
-  const [data, save] = useStorage(authedUser);
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setAuthLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const authedUser = firebaseUser?.displayName || firebaseUser?.email?.split("@")[0] || "";
+  const [data, save] = useStorage(firebaseUser?.uid);
   const [view, setView] = useState("home");
   const [workout, setWorkout] = useState(null);
   const [exSearch, setExSearch] = useState("");
@@ -1878,16 +1790,22 @@ export default function App() {
     document.head.appendChild(style);
   }, []);
 
-  const handleLogin = (username, isNew = false) => {
-    try { sessionStorage.setItem("gymtrack-user", username); } catch {}
-    setAuthedUser(username); setWorkout(null); setView(isNew ? "profile" : "home");
-  };
-  const handleLogout = () => {
-    try { sessionStorage.removeItem("gymtrack-user"); } catch {}
-    setAuthedUser(null); setWorkout(null); setView("home");
+  const handleLogout = async () => {
+    await signOut(auth);
+    setWorkout(null); setView("home"); setIsNewUser(false);
   };
 
-  if (!authedUser) return <LandingPage onLogin={handleLogin} />;
+  useEffect(() => {
+    if (firebaseUser && isNewUser) { setView("profile"); setIsNewUser(false); }
+  }, [firebaseUser, isNewUser]);
+
+  if (authLoading) return (
+    <div style={{ background: "#0A0A0A", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "#5B9BD5", fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 3 }}>LOADING…</div>
+    </div>
+  );
+
+  if (!firebaseUser) return <LandingPage onNewUser={() => setIsNewUser(true)} />;
 
   const allExercises = [...new Set([...DEFAULT_EXERCISES, ...data.workouts.flatMap(w => w.exercises.map(e => e.name))])].sort();
   const filtered = allExercises.filter(e => e.toLowerCase().includes(exSearch.toLowerCase()));
@@ -2318,8 +2236,8 @@ export default function App() {
                 <div style={{ marginBottom: 12 }}>
                   <label style={lbl}>Email</label>
                   <div style={{ position: "relative" }}>
-                    <input type="email" value={draft.email || getUsers()[authedUser]?.email || ""} onChange={e => setDraft("email", e.target.value)} placeholder="your@email.com" style={pField} />
-                    {getUsers()[authedUser]?.verified && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#5bb85b", fontWeight: 700 }}>✓</span>}
+                    <input type="email" value={draft.email || firebaseUser?.email || ""} onChange={e => setDraft("email", e.target.value)} placeholder="your@email.com" style={pField} />
+                    {firebaseUser?.emailVerified && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#5bb85b", fontWeight: 700 }}>✓</span>}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -2371,8 +2289,8 @@ export default function App() {
                     ))}
                   </div>
                   {(() => {
-                    const em = p.email || getUsers()[authedUser]?.email;
-                    const ver = getUsers()[authedUser]?.verified;
+                    const em = p.email || firebaseUser?.email;
+                    const ver = firebaseUser?.emailVerified;
                     return em ? (
                       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${t.border}` }}>
                         <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Email</div>
@@ -2436,7 +2354,7 @@ export default function App() {
       {/* ── HELP MODAL ───────────────────── */}
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
       {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
-      {showSettings && <SettingsModal authedUser={authedUser} onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} />}
 
       {/* ── SIGN OUT — fixed above nav on profile tab ── */}
       {view === "profile" && (
