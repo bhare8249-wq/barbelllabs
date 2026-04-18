@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Barbell Labs</string>
+    <string name="title_activity_main">Barbell Labs</string>
+    <string name="package_name">com.barbellabs.app</string>
+    <string name="custom_url_scheme">com.barbellabs.app</string>
+</resources>
