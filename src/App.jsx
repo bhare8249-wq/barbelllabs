@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
-import { auth, googleProvider } from "./firebase";
+import { auth, googleProvider, db } from "./firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -136,12 +137,23 @@ const APP_VERSION = "0.3.10";
 const BUILD_DATE  = "2026-04-16";
 
 function useStorage(uid) {
-  const key = `gymtrack-data-${uid || "__guest__"}`;
-  const [data, setData] = useState(() => {
-    try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : { workouts: [], bodyweight: [] }; }
-    catch { return { workouts: [], bodyweight: [] }; }
-  });
-  const save = (next) => { setData(next); try { localStorage.setItem(key, JSON.stringify(next)); } catch {} };
+  const [data, setData] = useState({ workouts: [], bodyweight: [] });
+
+  useEffect(() => {
+    if (!uid) { setData({ workouts: [], bodyweight: [] }); return; }
+    const ref = doc(db, "users", uid);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) setData(snap.data());
+      else setData({ workouts: [], bodyweight: [] });
+    });
+    return unsub;
+  }, [uid]);
+
+  const save = (next) => {
+    setData(next);
+    if (uid) setDoc(doc(db, "users", uid), next).catch(console.error);
+  };
+
   return [data, save];
 }
 
