@@ -1,0 +1,47 @@
+<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#1E1E2A"/>
+      <stop offset="100%" stop-color="#0A0A0A"/>
+    </radialGradient>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6BAAE0"/>
+      <stop offset="100%" stop-color="#4278B0"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7BBAF0"/>
+      <stop offset="100%" stop-color="#4A8BC4"/>
+    </linearGradient>
+    <linearGradient id="plateInner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5B9BD5"/>
+      <stop offset="100%" stop-color="#3A6E9E"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Left outer weight plate -->
+  <rect x="68" y="336" width="112" height="352" rx="28" fill="url(#plate)"/>
+  <!-- Left outer plate highlight -->
+  <rect x="68" y="336" width="112" height="28" rx="14" fill="#8BCAFF" opacity="0.3"/>
+
+  <!-- Left inner weight plate -->
+  <rect x="196" y="384" width="74" height="256" rx="20" fill="url(#plateInner)"/>
+
+  <!-- Center bar -->
+  <rect x="270" y="464" width="484" height="96" rx="14" fill="url(#bar)"/>
+  <!-- Bar highlight -->
+  <rect x="270" y="464" width="484" height="22" rx="11" fill="#AADDFF" opacity="0.25"/>
+
+  <!-- Right inner weight plate -->
+  <rect x="754" y="384" width="74" height="256" rx="20" fill="url(#plateInner)"/>
+
+  <!-- Right outer weight plate -->
+  <rect x="844" y="336" width="112" height="352" rx="28" fill="url(#plate)"/>
+  <!-- Right outer plate highlight -->
+  <rect x="844" y="336" width="112" height="28" rx="14" fill="#8BCAFF" opacity="0.3"/>
+
+  <!-- Subtle center glow -->
+  <ellipse cx="512" cy="512" rx="300" ry="80" fill="#5B9BD5" opacity="0.06"/>
+</svg>
