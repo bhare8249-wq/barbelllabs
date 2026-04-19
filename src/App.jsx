@@ -836,6 +836,86 @@ function DualLineChart({ points, lineColor = WEIGHT_COLOR }) {
   );
 }
 
+// ── Muscle Group Breakdown ────────────────────────────────────────────
+const MUSCLE_KEYWORDS = [
+  { group: "Chest",      color: "#d55b5b", icon: "💪", keys: ["bench", "chest", "fly", "flye", "pec", "push up", "pushup", "dip"] },
+  { group: "Back",       color: "#5B9BD5", icon: "🏋️", keys: ["row", "pulldown", "pull-up", "pullup", "chin", "deadlift", "lat ", "t-bar", "rack pull", "shrug"] },
+  { group: "Shoulders",  color: "#A8C8E8", icon: "🔝", keys: ["shoulder", "press", "lateral", "front raise", "rear delt", "face pull", "overhead", "ohp", "arnold", "upright row"] },
+  { group: "Legs",       color: "#5bb85b", icon: "🦵", keys: ["squat", "leg ", "lunge", "hamstring", "quad", "calf", "glute", "hip thrust", "rdl", "romanian", "hack squat", "leg press", "step up", "sumo"] },
+  { group: "Biceps",     color: "#b55bd5", icon: "💪", keys: ["curl", "bicep", "hammer", "preacher", "concentration"] },
+  { group: "Triceps",    color: "#d5a55b", icon: "💪", keys: ["tricep", "extension", "pushdown", "skull", "close grip", "overhead tri"] },
+  { group: "Core",       color: "#ff9500", icon: "🔥", keys: ["ab ", "abs", "core", "plank", "crunch", "sit up", "situp", "oblique", "hanging", "cable crunch", "russian twist"] },
+  { group: "Cardio",     color: "#5bd5d5", icon: "🏃", keys: ["run", "bike", "row machine", "elliptical", "cardio", "treadmill", "jump"] },
+];
+
+function getMuscleGroup(exerciseName) {
+  const lower = exerciseName.toLowerCase();
+  // Shoulders before chest/back to catch "overhead press"
+  for (const mg of MUSCLE_KEYWORDS) {
+    if (mg.keys.some(k => lower.includes(k))) return mg;
+  }
+  return null;
+}
+
+function MuscleBreakdown({ workouts }) {
+  const t = useT();
+  const [range, setRange] = useState("week");
+
+  const now = new Date();
+  const cutoff = new Date(now);
+  if (range === "week") cutoff.setDate(now.getDate() - 7);
+  else if (range === "month") cutoff.setDate(now.getDate() - 30);
+  else cutoff.setFullYear(now.getFullYear() - 1);
+
+  const recent = workouts.filter(w => new Date(w.date) >= cutoff);
+  const counts = {};
+  recent.forEach(w => {
+    w.exercises.forEach(ex => {
+      const mg = getMuscleGroup(ex.name);
+      if (mg) {
+        counts[mg.group] = counts[mg.group] || { ...mg, sets: 0, sessions: new Set() };
+        counts[mg.group].sets += ex.sets.length;
+        counts[mg.group].sessions.add(w.date);
+      }
+    });
+  });
+
+  const groups = Object.values(counts).sort((a, b) => b.sets - a.sets);
+  if (!groups.length) return null;
+
+  const maxSets = Math.max(...groups.map(g => g.sets));
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ borderTop: `1px solid ${t.border}`, margin: "0 0 18px" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: 1, color: t.textSub }}>MUSCLE GROUPS</div>
+        <div style={{ display: "flex", background: t.surfaceHigh, borderRadius: 8, padding: 2, gap: 2 }}>
+          {[["week","7D"],["month","30D"],["year","1Y"]].map(([val, label]) => (
+            <button key={val} onClick={() => setRange(val)} style={{ background: range === val ? accent : "transparent", color: range === val ? "#fff" : t.textMuted, border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {groups.map(g => (
+          <div key={g.group} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "10px 14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{g.icon}</span>
+                <span style={{ fontWeight: 700, fontSize: 14, color: t.text }}>{g.group}</span>
+              </div>
+              <div style={{ fontSize: 12, color: t.textMuted }}>{g.sets} sets · {g.sessions.size} session{g.sessions.size !== 1 ? "s" : ""}</div>
+            </div>
+            <div style={{ height: 6, background: t.border, borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.round((g.sets / maxSets) * 100)}%`, background: g.color, borderRadius: 3, transition: "width 0.6s ease" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Big 3 PRs ─────────────────────────────────────────────────────────
 function Big3PRs({ workouts }) {
   const t = useT();
@@ -1767,19 +1847,26 @@ function WorkoutCompleteScreen({ workout, prevWorkouts, onClose }) {
 }
 
 // ── Plate Calculator ─────────────────────────────────────────────────
-const PLATES = [45, 35, 25, 10, 5, 2.5];
-const PLATE_COLORS = { 45: "#d55b5b", 35: "#5B9BD5", 25: "#A8C8E8", 10: "#5bb85b", 5: "#b55bd5", 2.5: "#d5a55b" };
-const BAR_WEIGHT = 45;
+const PLATES = [45, 35, 25, 10, 5, 2.5]; // legacy — use PLATES_LBS / PLATES_KG
+const PLATE_COLORS_LBS = { 45: "#d55b5b", 35: "#5B9BD5", 25: "#A8C8E8", 10: "#5bb85b", 5: "#b55bd5", 2.5: "#d5a55b" };
+const PLATE_COLORS_KG  = { 25: "#d55b5b", 20: "#5B9BD5", 15: "#A8C8E8", 10: "#5bb85b", 5: "#b55bd5", 2.5: "#d5a55b", 1.25: "#ff9500" };
+const PLATES_LBS = [45, 35, 25, 10, 5, 2.5];
+const PLATES_KG  = [25, 20, 15, 10, 5, 2.5, 1.25];
+const BAR_OPTIONS = {
+  lbs: [{ label: "45 lb (Olympic)", val: 45 }, { label: "35 lb (Women's)", val: 35 }],
+  kg:  [{ label: "20 kg (Olympic)", val: 20 }, { label: "15 kg (Women's)", val: 15 }],
+};
 
-function calcPlates(target) {
-  let remaining = (target - BAR_WEIGHT) / 2;
+function calcPlates(target, barWeight, unit) {
+  const plates = unit === "kg" ? PLATES_KG : PLATES_LBS;
+  let remaining = Math.round(((target - barWeight) / 2) * 1000) / 1000;
   if (remaining < 0) return null;
   const result = [];
-  for (const plate of PLATES) {
+  for (const plate of plates) {
     const count = Math.floor(remaining / plate);
-    if (count > 0) { result.push({ weight: plate, count }); remaining = Math.round((remaining - plate * count) * 100) / 100; }
+    if (count > 0) { result.push({ weight: plate, count }); remaining = Math.round((remaining - plate * count) * 1000) / 1000; }
   }
-  return { plates: result, remainder: remaining };
+  return { plates: result, remainder: Math.round(remaining * 1000) / 1000 };
 }
 
 // ── Templates ─────────────────────────────────────────────────────────
@@ -1861,53 +1948,194 @@ function TemplateManager({ templates, onLoad, onDelete, onRename, onClose }) {
   );
 }
 
-function PlateCalculator({ onClose }) {
+function OneRMCalculator({ onClose }) {
   const t = useT(); const S = useS();
-  const [target, setTarget] = useState("");
-  const result = target ? calcPlates(parseFloat(target) || 0) : null;
-  const total = result ? BAR_WEIGHT + result.plates.reduce((s, p) => s + p.weight * p.count * 2, 0) : 0;
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const w = parseFloat(weight) || 0;
+  const r = parseInt(reps) || 0;
+  const valid = w > 0 && r >= 1 && r <= 15;
+  const epley   = valid ? Math.round(w * (1 + r / 30)) : null;
+  const brzycki = valid && r < 37 ? Math.round(w * (36 / (37 - r))) : null;
+  const best1RM = epley && brzycki ? Math.round((epley + brzycki) / 2) : (epley || brzycki || null);
+  const PCTS = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50];
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
-      <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "88vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
-        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 18 }}>
+          1RM <span style={{ color: accent }}>Estimator</span>
+        </div>
+
+        {/* Inputs */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Weight (lbs)</div>
+            <input type="number" value={weight} onChange={e => setWeight(e.target.value)} placeholder="e.g. 185" inputMode="decimal" autoFocus
+              style={{ ...S.inputStyle({ width: "100%", fontSize: 20, padding: "11px 14px", borderRadius: 12 }) }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Reps (1–15)</div>
+            <input type="number" value={reps} onChange={e => setReps(e.target.value)} placeholder="e.g. 5" inputMode="numeric" min="1" max="15"
+              style={{ ...S.inputStyle({ width: "100%", fontSize: 20, padding: "11px 14px", borderRadius: 12 }) }} />
+          </div>
+        </div>
+
+        {!valid && weight !== "" && reps !== "" && (
+          <div style={{ fontSize: 12, color: "#d55b5b", marginBottom: 14 }}>Enter a weight and reps between 1 and 15 for an accurate estimate.</div>
+        )}
+
+        {best1RM && (
+          <>
+            {/* Big 1RM display */}
+            <div style={{ background: `${accent}12`, border: `1px solid ${accent}33`, borderRadius: 16, padding: "18px 20px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>Estimated 1RM</div>
+                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 44, color: accent, lineHeight: 1 }}>{best1RM} <span style={{ fontSize: 16, color: t.textMuted }}>lbs</span></div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginTop: 4 }}>Average of Epley ({epley}) & Brzycki ({brzycki})</div>
+              </div>
+              <div style={{ fontSize: 48, lineHeight: 1 }}>🏆</div>
+            </div>
+
+            {/* Percentage table */}
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Training Percentages</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {PCTS.map(pct => {
+                const liftWeight = Math.round(best1RM * pct / 100 / 2.5) * 2.5;
+                const isWorking = pct >= 75 && pct <= 90;
+                return (
+                  <div key={pct} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: isWorking ? `${accent}10` : t.surfaceHigh, border: `1px solid ${isWorking ? accent + "33" : t.border}`, borderRadius: 8, padding: "8px 12px" }}>
+                    <span style={{ fontSize: 12, color: isWorking ? accent : t.textMuted, fontWeight: isWorking ? 700 : 400 }}>{pct}%</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: t.text }}>{liftWeight} lbs</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: t.textMuted, marginTop: 10, textAlign: "center" }}>Highlighted = typical working set range (75–90%)</div>
+          </>
+        )}
+
+        <button onClick={onClose} style={{ ...S.solidBtn({ marginTop: 18, width: "100%", padding: 14, fontSize: 16 }) }}>Done</button>
+      </div>
+    </div>
+  );
+}
+
+function PlateCalculator({ onClose }) {
+  const t = useT(); const S = useS();
+  const [target, setTarget] = useState("");
+  const [unit, setUnit] = useState("lbs");
+  const [barWeight, setBarWeight] = useState(45);
+  const COLORS = unit === "kg" ? PLATE_COLORS_KG : PLATE_COLORS_LBS;
+  const result = target ? calcPlates(parseFloat(target) || 0, barWeight, unit) : null;
+  const total = result ? barWeight + result.plates.reduce((s, p) => s + p.weight * p.count * 2, 0) : 0;
+  const targetNum = parseFloat(target) || 0;
+
+  // Visual bar diagram
+  const BarDiagram = ({ plates }) => {
+    const sideColors = plates.flatMap(p => Array(p.count).fill(COLORS[p.weight] || "#888"));
+    const maxPlates = 6;
+    const shown = sideColors.slice(0, maxPlates);
+    const extra = sideColors.length - maxPlates;
+    const plateW = 14;
+    const plateH = (p) => {
+      const w = p.weight;
+      if (w >= 45 || w >= 25) return 52;
+      if (w >= 35 || w >= 20) return 46;
+      if (w >= 25 || w >= 15) return 40;
+      if (w >= 10) return 34;
+      if (w >= 5) return 28;
+      return 22;
+    };
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 16, height: 64, overflow: "hidden" }}>
+        {/* Left sleeve */}
+        <div style={{ width: 18, height: 10, background: "#555", borderRadius: "3px 0 0 3px" }} />
+        {/* Left plates (reversed — closest to center first visually) */}
+        {[...shown].reverse().map((color, i) => {
+          const plate = plates[plates.length - 1 - Math.floor(i / (shown.length / plates.length))] || plates[0];
+          const h = plateH(plate);
+          return <div key={i} style={{ width: plateW, height: h, background: color + "CC", border: `1.5px solid ${color}`, borderRadius: 2, flexShrink: 0 }} />;
+        })}
+        {extra > 0 && <div style={{ width: 16, fontSize: 9, color: t.textMuted, textAlign: "center", lineHeight: 1 }}>+{extra}</div>}
+        {/* Bar center */}
+        <div style={{ width: 60, height: 10, background: "#888", flexShrink: 0 }} />
+        {/* Right plates */}
+        {shown.map((color, i) => {
+          const plate = plates[Math.floor(i / (shown.length / plates.length))] || plates[0];
+          const h = plateH(plate);
+          return <div key={i} style={{ width: plateW, height: h, background: color + "CC", border: `1.5px solid ${color}`, borderRadius: 2, flexShrink: 0 }} />;
+        })}
+        {extra > 0 && <div style={{ width: 16, fontSize: 9, color: t.textMuted, textAlign: "center", lineHeight: 1 }}>+{extra}</div>}
+        {/* Right sleeve */}
+        <div style={{ width: 18, height: 10, background: "#555", borderRadius: "0 3px 3px 0" }} />
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+      <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "88vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 14 }}>
           Plate <span style={{ color: accent }}>Calculator</span>
         </div>
-        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Target Weight (lbs)</div>
+
+        {/* Unit toggle */}
+        <div style={{ display: "flex", background: t.surfaceHigh, borderRadius: 10, padding: 3, marginBottom: 14, gap: 3 }}>
+          {["lbs", "kg"].map(u => (
+            <button key={u} onClick={() => { setUnit(u); setTarget(""); setBarWeight(u === "kg" ? 20 : 45); }} style={{ flex: 1, background: unit === u ? accent : "transparent", color: unit === u ? "#fff" : t.textMuted, border: "none", borderRadius: 7, padding: "8px 0", cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s" }}>{u.toUpperCase()}</button>
+          ))}
+        </div>
+
+        {/* Bar weight selector */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Bar Weight</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {BAR_OPTIONS[unit].map(opt => (
+            <button key={opt.val} onClick={() => setBarWeight(opt.val)} style={{ flex: 1, background: barWeight === opt.val ? `${accent}22` : t.surfaceHigh, border: `1px solid ${barWeight === opt.val ? accent : t.border}`, borderRadius: 10, padding: "9px 8px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: barWeight === opt.val ? accent : t.textSub, transition: "all 0.2s" }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Target input */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Target Weight ({unit})</div>
         <input
-          type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="e.g. 225"
+          type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder={unit === "kg" ? "e.g. 100" : "e.g. 225"}
           autoFocus inputMode="decimal"
           style={{ ...S.inputStyle({ width: "100%", fontSize: 22, padding: "12px 14px", borderRadius: 12, marginBottom: 16 }) }}
         />
+
         {result && (
           <>
+            {result.plates.length > 0 && <BarDiagram plates={result.plates} />}
             <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Each side of the bar</div>
             {result.plates.length === 0 && result.remainder === 0 && (
-              <div style={{ color: t.textMuted, fontSize: 14 }}>Just the bar ({BAR_WEIGHT} lbs)</div>
+              <div style={{ color: t.textMuted, fontSize: 14, marginBottom: 8 }}>Just the bar ({barWeight} {unit})</div>
             )}
             {result.plates.map(p => (
               <div key={p.weight} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: PLATE_COLORS[p.weight] + "22", border: `2px solid ${PLATE_COLORS[p.weight]}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue', cursive", fontSize: 16, color: PLATE_COLORS[p.weight], flexShrink: 0 }}>
+                <div style={{ width: 52, height: 52, borderRadius: "50%", background: (COLORS[p.weight] || "#888") + "22", border: `2px solid ${COLORS[p.weight] || "#888"}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue', cursive", fontSize: 16, color: COLORS[p.weight] || "#888", flexShrink: 0 }}>
                   {p.weight}
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: t.text }}>× {p.count}</div>
-                  <div style={{ fontSize: 11, color: t.textMuted }}>{p.weight * p.count} lbs per side</div>
+                  <div style={{ fontSize: 11, color: t.textMuted }}>{p.weight * p.count} {unit} per side</div>
                 </div>
               </div>
             ))}
             {result.remainder > 0 && (
-              <div style={{ fontSize: 12, color: "#d55b5b", marginTop: 4 }}>⚠ {result.remainder} lbs unaccounted — not achievable with standard plates</div>
+              <div style={{ fontSize: 12, color: "#d55b5b", marginTop: 4 }}>⚠ {result.remainder} {unit} unaccounted — not achievable with standard plates</div>
             )}
             <div style={{ marginTop: 14, padding: "10px 14px", background: t.surfaceHigh, borderRadius: 10, border: `1px solid ${t.border}`, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
               <span style={{ color: t.textMuted }}>Actual weight loaded</span>
-              <span style={{ fontWeight: 700, color: total === parseFloat(target) ? "#5bb85b" : accent }}>{total} lbs</span>
+              <span style={{ fontWeight: 700, color: Math.abs(total - targetNum) < 0.01 ? "#5bb85b" : accent }}>{total} {unit}</span>
             </div>
           </>
         )}
         {result === null && target !== "" && (
-          <div style={{ fontSize: 13, color: "#d55b5b" }}>Weight must be greater than {BAR_WEIGHT} lbs (bar weight)</div>
+          <div style={{ fontSize: 13, color: "#d55b5b", marginBottom: 8 }}>Weight must be greater than bar weight ({barWeight} {unit})</div>
         )}
         <button onClick={onClose} style={{ ...S.solidBtn({ marginTop: 18, width: "100%", padding: 14, fontSize: 16 }) }}>Done</button>
       </div>
@@ -1975,6 +2203,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [show1RM, setShow1RM] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -2229,6 +2458,7 @@ export default function App() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: t.textMuted, letterSpacing: 0.3 }}>{Math.round((Date.now() - workout.startTime) / 60000)} min</div>}
+              <button onClick={() => setShow1RM(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "8px 14px", fontSize: 12, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3, minHeight: 36, touchAction: "manipulation" }}>1RM</button>
               <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3, minHeight: 36, touchAction: "manipulation" }}>Plates</button>
               <HelpBtn page="log" onOpen={() => setHelpPage("log")} />
             </div>
@@ -2403,6 +2633,7 @@ export default function App() {
             <HelpBtn page="progress" onOpen={() => setHelpPage("progress")} />
           </div>
           <Big3PRs workouts={data.workouts} />
+          {data.workouts.length > 0 && <MuscleBreakdown workouts={data.workouts} />}
           <div style={{ borderTop: `1px solid ${t.border}`, margin: "22px 0 18px" }} />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: 1, color: t.textSub }}>EXERCISE PROGRESSION</div>
@@ -2663,6 +2894,7 @@ export default function App() {
       {/* ── HELP MODAL ───────────────────── */}
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
       {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
+      {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} />}
