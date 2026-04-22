@@ -146,8 +146,8 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.1";
-const BUILD_DATE  = "2026-04-18";
+const APP_VERSION = "2.4.3";
+const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
   const [data, setData] = useState({ workouts: [], bodyweight: [] });
@@ -2151,7 +2151,7 @@ function OnboardingCarousel({ onDone }) {
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      style={{ minHeight: "100vh", background: THEMES.dark.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", userSelect: "none" }}
+      style={{ minHeight: "100dvh", background: THEMES.dark.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", userSelect: "none" }}
     >
       {/* Logo */}
       <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 4, marginBottom: 48, opacity: 0.6 }}>
@@ -2247,7 +2247,7 @@ function LandingPage({ onNewUser }) {
   const fStyle = { background: "#111", border: "1px solid #2d2d2d", borderRadius: 11, color: "#fff", padding: "13px 16px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box" };
 
   return (
-    <div style={{ background: bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 28px", fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto" }}>
+    <div style={{ background: bg, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px 24px", fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto" }}>
       <style>{`
         @keyframes gt-line-grow { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
         @keyframes gt-gym-in { from { opacity: 0; letter-spacing: 12px; } to { opacity: 1; letter-spacing: 4px; } }
@@ -2256,17 +2256,17 @@ function LandingPage({ onNewUser }) {
         @keyframes gt-accent-pulse { 0%,100% { text-shadow: 0 0 0px rgba(91,155,213,0); } 50% { text-shadow: 0 0 18px rgba(91,155,213,0.45); } }
       `}</style>
       {/* Logo */}
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${accent}, transparent)`, marginBottom: 14, transformOrigin: "center", animation: "gt-line-grow 1.4s cubic-bezier(0.16,1,0.3,1) 0.2s both" }} />
-        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 52, lineHeight: 1, display: "flex", alignItems: "baseline", justifyContent: "center" }}>
+      <div style={{ textAlign: "center", marginBottom: 24 }}>
+        <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${accent}, transparent)`, marginBottom: 10, transformOrigin: "center", animation: "gt-line-grow 1.4s cubic-bezier(0.16,1,0.3,1) 0.2s both" }} />
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 36, lineHeight: 1, display: "flex", alignItems: "baseline", justifyContent: "center" }}>
           <span style={{ color: "#ffffff", letterSpacing: 4, animation: "gt-gym-in 1.2s cubic-bezier(0.16,1,0.3,1) 0.6s both", display: "inline-block" }}>BARBELL</span>
           <span style={{ color: accent, letterSpacing: 4, animation: "gt-track-in 1.2s cubic-bezier(0.16,1,0.3,1) 1.3s both, gt-accent-pulse 3s ease-in-out 3s infinite", display: "inline-block" }}>LABS</span>
         </div>
-        <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${accent}55, transparent)`, marginTop: 14, transformOrigin: "center", animation: "gt-line-grow 1.4s cubic-bezier(0.16,1,0.3,1) 0.9s both" }} />
-        <div style={{ color: "#444", fontSize: 13, marginTop: 12, letterSpacing: 2, textTransform: "uppercase", animation: "gt-tag-in 1s ease 2.2s both" }}>Train · Log · Improve</div>
+        <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${accent}55, transparent)`, marginTop: 10, transformOrigin: "center", animation: "gt-line-grow 1.4s cubic-bezier(0.16,1,0.3,1) 0.9s both" }} />
+        <div style={{ color: "#444", fontSize: 11, marginTop: 8, letterSpacing: 2, textTransform: "uppercase", animation: "gt-tag-in 1s ease 2.2s both" }}>Train · Log · Improve</div>
       </div>
       {/* Card */}
-      <div style={{ width: "100%", background: sh, borderRadius: 18, border: "1px solid #2a2a2a", padding: "28px 24px", opacity: animIn ? 1 : 0, transform: animIn ? "translateY(0)" : "translateY(20px)", transition: "all 0.5s ease 0.1s" }}>
+      <div style={{ width: "100%", background: sh, borderRadius: 18, border: "1px solid #2a2a2a", padding: "22px 20px", opacity: animIn ? 1 : 0, transform: animIn ? "translateY(0)" : "translateY(20px)", transition: "all 0.5s ease 0.1s" }}>
         {mode === "verify" ? (
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📬</div>
@@ -2287,7 +2287,7 @@ function LandingPage({ onNewUser }) {
         ) : (
           <>
             {/* Tab toggle */}
-            <div style={{ display: "flex", background: "#111", borderRadius: 10, padding: 4, marginBottom: 24, gap: 4 }}>
+            <div style={{ display: "flex", background: "#111", borderRadius: 10, padding: 4, marginBottom: 16, gap: 4 }}>
               {["login", "signup"].map(m => (
                 <button key={m} onClick={() => switchMode(m)} style={{ flex: 1, background: mode === m ? accent : "transparent", color: mode === m ? "#ffffff" : "#555", border: "none", borderRadius: 7, padding: "9px 0", cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, fontSize: 15, transition: "all 0.2s" }}>
                   {m === "login" ? "SIGN IN" : "CREATE ACCOUNT"}
@@ -2295,7 +2295,7 @@ function LandingPage({ onNewUser }) {
               ))}
             </div>
             {/* Fields */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 8 }}>
               {mode === "signup" && (
                 <div>
                   <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Username</label>
@@ -2332,11 +2332,11 @@ function LandingPage({ onNewUser }) {
               </div>
             </div>
             {error && <div style={{ background: "rgba(213,91,91,0.12)", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 8, padding: "9px 13px", fontSize: 13, marginBottom: 16, marginTop: 8 }}>{error}</div>}
-            <button onClick={handleSubmit} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 11, padding: 15, marginTop: error ? 0 : 16, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1.5, fontSize: 20, cursor: "pointer" }}>
+            <button onClick={handleSubmit} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 11, padding: 14, marginTop: error ? 0 : 12, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1.5, fontSize: 20, cursor: "pointer" }}>
               {mode === "login" ? "SIGN IN" : "CREATE ACCOUNT"}
             </button>
             {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0 12px" }}>
               <div style={{ flex: 1, height: 1, background: "#2a2a2a" }} />
               <span style={{ color: "#444", fontSize: 12, letterSpacing: 0.5 }}>OR</span>
               <div style={{ flex: 1, height: 1, background: "#2a2a2a" }} />
@@ -2344,17 +2344,15 @@ function LandingPage({ onNewUser }) {
             {/* Google Sign In */}
             <GoogleSignInButton onError={setError} />
             {/* Apple — coming soon */}
-            <div style={{ marginBottom: 10 }}>
-              <button disabled style={{ width: "100%", background: "#1a1a1a", border: "1px solid #2e2e2e", borderRadius: 11, color: "#ccc", padding: "13px 16px", fontSize: 14, fontWeight: 600, cursor: "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: 0.45, boxSizing: "border-box" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-                Continue with Apple
-              </button>
-              <div style={{ textAlign: "center", fontSize: 10, color: "#444", marginTop: 4 }}>Coming soon</div>
+            <div style={{ textAlign: "center", fontSize: 11, color: "#444", marginTop: 10, letterSpacing: 0.3 }}>
+              Apple sign-in coming soon
             </div>
           </>
         )}
       </div>
-      <div style={{ marginTop: 24, color: "#333", fontSize: 12, textAlign: "center", opacity: animIn ? 1 : 0, transition: "opacity 0.5s ease 0.3s" }}>Your data is securely stored in the cloud</div>
+      {mode === "signup" && (
+        <div style={{ marginTop: 24, color: "#333", fontSize: 12, textAlign: "center", opacity: animIn ? 1 : 0, transition: "opacity 0.5s ease 0.3s" }}>Your data is securely stored in the cloud</div>
+      )}
     </div>
   );
 }
@@ -2829,6 +2827,17 @@ export default function App() {
   const toggleTheme = () => { const n = theme === "dark" ? "light" : "dark"; setTheme(n); try { localStorage.setItem("barbelllabs-theme", n); } catch {} };
 
   useEffect(() => {
+    const color = theme === "dark" ? "#0A0A0A" : "#FFFFFF";
+    let meta = document.querySelector('meta[name="theme-color"]:not([media])');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "theme-color");
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", color);
+  }, [theme]);
+
+  useEffect(() => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap";
@@ -2870,7 +2879,7 @@ export default function App() {
   }, [firebaseUser, isNewUser]);
 
   if (authLoading) return (
-    <div style={{ background: "#0A0A0A", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: "#0A0A0A", minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ color: "#5B9BD5", fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 3 }}>LOADING…</div>
     </div>
   );
@@ -2966,7 +2975,7 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={theme}>
     <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-      style={{ "--bl-surface": t.surfaceHigh, "--bl-border": t.border, "--bl-muted": t.textMuted, background: t.bg, minHeight: "100vh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", transition: "background 0.3s, color 0.3s" }}>
+      style={{ "--bl-surface": t.surfaceHigh, "--bl-border": t.border, "--bl-muted": t.textMuted, background: t.bg, minHeight: "100dvh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", transition: "background 0.3s, color 0.3s" }}>
       {completedWorkout && <WorkoutCompleteScreen workout={completedWorkout.workout} prevWorkouts={completedWorkout.prevWorkouts} onClose={() => setCompletedWorkout(null)} />}
 
       {/* ── ANIMATED VIEW WRAPPER ────────── */}
