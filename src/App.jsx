@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.3";
+const APP_VERSION = "2.4.4";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -560,6 +560,8 @@ const Icon = ({ name, size = 18, color }) => {
     zap:      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
     gear:         <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
     chevronRight: <polyline points="9 18 15 12 9 6"/>,
+    help:         <><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    bell:         <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{p[name]}</svg>;
 };
@@ -723,20 +725,42 @@ const pillBtnPrimary = (extra = {}) => ({
   ...extra,
 });
 
-// ── Help Button ───────────────────────────────────────────────────────
-function HelpBtn({ page, onOpen }) {
+// ── Top Actions (icon-only buttons for top-right nav slot) ────────────
+function IconBtn({ icon, onClick, label, badge }) {
   const t = useT();
   return (
-    <button onClick={onOpen} style={{ ...pillBtn(t), padding: "5px 12px 5px 10px" }}>
-      <span style={{
-        background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff",
-        borderRadius: "50%", width: 16, height: 16,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 800, lineHeight: 1, flexShrink: 0,
-      }}>?</span>
-      Help
+    <button onClick={onClick} aria-label={label} title={label} style={{
+      position: "relative",
+      width: 36, height: 36, borderRadius: "50%",
+      background: t.surfaceHigh, border: `1px solid ${t.border}`,
+      color: t.textSub, cursor: "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 0, flexShrink: 0, transition: "background 0.15s, color 0.15s",
+    }}>
+      <Icon name={icon} size={16} />
+      {badge > 0 && (
+        <span style={{
+          position: "absolute", top: -2, right: -2,
+          minWidth: 16, height: 16, padding: "0 4px",
+          borderRadius: 8, background: "#ff3b30", color: "#fff",
+          fontSize: 10, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          border: `2px solid ${t.bg}`, boxSizing: "content-box",
+        }}>{badge > 9 ? "9+" : badge}</span>
+      )}
     </button>
   );
+}
+
+const TopActions = ({ children }) => (
+  <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+    {children}
+  </div>
+);
+
+// ── Help Button ───────────────────────────────────────────────────────
+function HelpBtn({ page, onOpen }) {
+  return <IconBtn icon="help" onClick={onOpen} label="Help" />;
 }
 
 // ── Rest Timer ────────────────────────────────────────────────────────
@@ -2020,7 +2044,7 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, toggleTheme }) {
+function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2044,6 +2068,19 @@ function SettingsModal({ authedUser, onClose, toggleTheme }) {
             <Icon name="x" size={16} />
           </button>
         </div>
+        {/* Profile */}
+        {onEditProfile && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Profile</div>
+            <button onClick={onEditProfile} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                <Icon name="edit2" size={16} />
+                Edit Profile
+              </span>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
+          </div>
+        )}
         {/* Theme toggle */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Appearance</div>
@@ -3031,21 +3068,21 @@ export default function App() {
         ];
         return (
           <div style={{ padding: "52px 20px 24px" }}>
-            {/* Logo */}
-            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 2, lineHeight: 1, marginBottom: 8 }}>BARBELL<span style={{ color: accent }}>LABS</span></div>
-            {/* Header */}
-            <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ color: t.textMuted, fontSize: 13, marginBottom: 3 }}>{greeting},</div>
-                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 34, letterSpacing: 1.5, lineHeight: 1 }}>
-                  {displayName} <span style={{ color: accent }}>💪</span>
-                </div>
-                <div style={{ color: t.textMuted, fontSize: 12, marginTop: 5 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
-                {streak > 0 && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,149,0,0.12)", border: "1px solid rgba(255,149,0,0.3)", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#ff9500", fontWeight: 700, marginTop: 8 }}>🔥 {streak} day streak</div>}
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Top row: logo + actions */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>BARBELL<span style={{ color: accent }}>LABS</span></div>
+              <TopActions>
                 <HelpBtn page="home" onOpen={() => setHelpPage("home")} />
+              </TopActions>
+            </div>
+            {/* Greeting */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ color: t.textMuted, fontSize: 13, marginBottom: 3 }}>{greeting},</div>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 34, letterSpacing: 1.5, lineHeight: 1 }}>
+                {displayName} <span style={{ color: accent }}>💪</span>
               </div>
+              <div style={{ color: t.textMuted, fontSize: 12, marginTop: 5 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+              {streak > 0 && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,149,0,0.12)", border: "1px solid rgba(255,149,0,0.3)", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#ff9500", fontWeight: 700, marginTop: 8 }}>🔥 {streak} day streak</div>}
             </div>
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
@@ -3445,11 +3482,10 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {!isEditing && <button onClick={startEdit} style={pillBtn(t)}>Edit</button>}
-                {!isEditing && <button onClick={() => setShowSettings(true)} style={{ ...pillBtn(t), padding: "5px 10px 5px 10px" }}><Icon name="gear" size={14} /> Settings</button>}
+              <TopActions>
+                {!isEditing && <IconBtn icon="gear" onClick={() => setShowSettings(true)} label="Settings" />}
                 <HelpBtn page="profile" onOpen={() => setHelpPage("profile")} />
-              </div>
+              </TopActions>
             </div>
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${t.surfaceHigh}, ${t.surface})`, border: `2px solid ${p.goal ? (GOALS.find(g => g.id === p.goal)?.color || t.border) : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto", boxShadow: "0 0 24px rgba(0,0,0,0.2)" }}>
@@ -3600,7 +3636,7 @@ export default function App() {
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} />}
 
       {/* ── SIGN OUT — fixed above nav on profile tab ── */}
       {view === "profile" && (
