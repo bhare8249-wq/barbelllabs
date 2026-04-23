@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.16";
+const APP_VERSION = "2.4.17";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -743,6 +743,7 @@ function suggestTags(exercises) {
   const hasLegs = cats.has("legs");
   const hasArms = cats.has("arms");
   const hasCore = cats.has("core");
+  const hasCardio = cats.has("cardio");
   const tags = [];
   if (hasChest || hasShoulders) tags.push("push");
   if (hasBack) tags.push("pull");
@@ -750,6 +751,7 @@ function suggestTags(exercises) {
   if ((hasChest || hasShoulders) && hasBack) tags.push("upperbody");
   if (hasArms && !hasChest && !hasShoulders && !hasBack) tags.push("arms");
   if (hasCore) tags.push("abs");
+  if (hasCardio) tags.push("cardio");
   return tags.slice(0, TAG_CAP);
 }
 
@@ -763,7 +765,17 @@ const WORKOUT_LABELS = [
   { id: "arms",      label: "Arms",       emoji: "💥", color: "#d55ba0", bg: "rgba(213,91,160,0.12)", border: "rgba(213,91,160,0.3)" },
   { id: "abs",       label: "Abs",        emoji: "🔥", color: "#A8C8E8", bg: "rgba(168,200,232,0.10)", border: "rgba(168,200,232,0.35)" },
   { id: "glutes",    label: "Glutes",     emoji: "🍑", color: "#ff9500", bg: "rgba(255,149,0,0.12)",  border: "rgba(255,149,0,0.3)" },
+  { id: "cardio",    label: "Cardio",     emoji: "🏃", color: "#5BB588", bg: "rgba(91,181,136,0.12)", border: "rgba(91,181,136,0.3)" },
 ];
+
+// Fix #18: Preset color palette for user-created tags (Steel-Blue-harmonized)
+const CUSTOM_TAG_COLORS = ["#5B9BD5", "#E67E6B", "#4A9EB8", "#D4A64E", "#7FB069", "#9E7ABF", "#D96B7A", "#E8B64C"];
+// Fix #18: derive bg + border from a tag's color at render time (custom tags store only color)
+const tagRenderCfg = (tag) => {
+  if (tag.bg && tag.border) return tag;
+  const c = tag.color || "#5B9BD5";
+  return { ...tag, bg: `${c}1f`, border: `${c}66` };
+};
 
 const GOALS = [
   { id: "muscle",   label: "Build Muscle",  emoji: "💪", desc: "Hypertrophy & size",    color: "#5b9bd5" },
@@ -2081,7 +2093,7 @@ function groupWorkoutsByPeriod(workouts) {
   }));
 }
 
-function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTemplate }) {
+function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTemplate, customTags }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [editingTags, setEditingTags] = useState(false);
@@ -2091,8 +2103,9 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
   const isDragging = useRef(false);
   const DELETE_W = 76;
 
+  const mergedLabels = allLabels(customTags);
   const activeLabels = workout.labels ? workout.labels : workout.label ? [workout.label] : [];
-  const activeCfgs = activeLabels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
+  const activeCfgs = activeLabels.map(id => mergedLabels.find(l => l.id === id)).filter(Boolean).map(tagRenderCfg);
   const toggleLabel = (e, id) => {
     e.stopPropagation();
     let next = activeLabels.includes(id) ? activeLabels.filter(l => l !== id) : activeLabels.length >= TAG_CAP ? [...activeLabels.slice(1), id] : [...activeLabels, id];
@@ -2176,10 +2189,11 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
                     <div style={{ fontSize: 10, color: t.textMuted }}>{activeLabels.length}/{TAG_CAP}</div>
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {WORKOUT_LABELS.map(l => {
+                    {mergedLabels.map(l => {
+                      const cfg = tagRenderCfg(l);
                       const isActive = activeLabels.includes(l.id);
                       return (
-                        <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 10, padding: "10px 14px", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= TAG_CAP) ? 0.4 : 1, minHeight: 40, touchAction: "manipulation" }}>
+                        <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? cfg.bg : "transparent", border: `1px solid ${isActive ? cfg.border : t.border}`, color: isActive ? cfg.color : t.textMuted, borderRadius: 10, padding: "10px 14px", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= TAG_CAP) ? 0.4 : 1, minHeight: 40, touchAction: "manipulation" }}>
                           {l.emoji} {l.label}{isActive && <span style={{ fontSize: 10, marginLeft: 1, opacity: 0.7 }}>✕</span>}
                         </button>
                       );
@@ -2413,7 +2427,7 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile }) {
+function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile, onManageTags }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2445,6 +2459,19 @@ function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile }) {
               <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
                 <Icon name="edit2" size={16} />
                 Edit Profile
+              </span>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
+          </div>
+        )}
+        {/* Tags */}
+        {onManageTags && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Tags</div>
+            <button onClick={onManageTags} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                <Icon name="tag" size={16} />
+                Manage Tags
               </span>
               <Icon name="chevronRight" size={14} color={t.textMuted} />
             </button>
@@ -3594,12 +3621,111 @@ function NotificationsModal({ notifications, onClose, onMarkAllRead, onClearAll,
   );
 }
 
+// ── Fix #18: Manage Tags (custom user-created tags) ──────────────────
+// Helper — merge built-in labels with user-created custom tags, normalize shape.
+function allLabels(customTags) {
+  const built = WORKOUT_LABELS;
+  const custom = (customTags || []).map(t => tagRenderCfg({ ...t, custom: true }));
+  return [...built, ...custom];
+}
+function findLabel(id, customTags) {
+  return allLabels(customTags).find(l => l.id === id) || null;
+}
+
+function ManageTagsModal({ customTags, onClose, onChange }) {
+  const t = useT();
+  const [draft, setDraft] = useState(null); // { id?, label, emoji, color }
+  const list = customTags || [];
+
+  const startAdd = () => setDraft({ label: "", emoji: "🏷️", color: CUSTOM_TAG_COLORS[0] });
+  const startEdit = (tag) => setDraft({ id: tag.id, label: tag.label, emoji: tag.emoji || "🏷️", color: tag.color || CUSTOM_TAG_COLORS[0] });
+
+  const saveDraft = () => {
+    const trimmed = (draft.label || "").trim().slice(0, 20);
+    if (!trimmed) return;
+    let next;
+    if (draft.id) {
+      next = list.map(t => t.id === draft.id ? { ...t, label: trimmed, emoji: draft.emoji, color: draft.color } : t);
+    } else {
+      const id = `ct_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+      next = [...list, { id, label: trimmed, emoji: draft.emoji, color: draft.color }];
+    }
+    onChange(next);
+    setDraft(null);
+  };
+  const deleteTag = (id) => onChange(list.filter(t => t.id !== id));
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "85dvh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${t.border}`, marginBottom: 14 }}>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1 }}>
+            Manage <span style={{ color: accent }}>Tags</span>
+          </div>
+          <button onClick={onClose} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        {draft && (
+          <div style={{ marginBottom: 16, padding: "14px 14px", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14 }}>
+            <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>{draft.id ? "Edit Tag" : "New Tag"}</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input type="text" value={draft.emoji} onChange={e => setDraft({ ...draft, emoji: e.target.value.slice(0, 4) })} placeholder="🏷️" maxLength={4} style={{ width: 56, textAlign: "center", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 10, color: t.text, padding: "10px 8px", fontSize: 20, outline: "none" }} />
+              <input type="text" value={draft.label} onChange={e => setDraft({ ...draft, label: e.target.value.slice(0, 20) })} placeholder="Tag name" maxLength={20} style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 10, color: t.text, padding: "10px 12px", fontSize: 14, outline: "none" }} />
+            </div>
+            <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Color</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+              {CUSTOM_TAG_COLORS.map(c => (
+                <button key={c} onClick={() => setDraft({ ...draft, color: c })} style={{ width: 32, height: 32, borderRadius: "50%", background: c, border: draft.color === c ? `2px solid ${t.text}` : `2px solid transparent`, cursor: "pointer", padding: 0, touchAction: "manipulation" }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setDraft(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 10, padding: "10px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={saveDraft} disabled={!(draft.label || "").trim()} style={{ flex: 2, background: (draft.label || "").trim() ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : t.surfaceHigh, border: "none", color: (draft.label || "").trim() ? "#fff" : t.textMuted, borderRadius: 10, padding: "10px 0", fontSize: 15, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: (draft.label || "").trim() ? "pointer" : "default" }}>SAVE</button>
+            </div>
+          </div>
+        )}
+
+        {!draft && (
+          <button onClick={startAdd} style={{ width: "100%", background: "transparent", border: `1px dashed ${t.border}`, color: accent, borderRadius: 12, padding: "12px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16, touchAction: "manipulation" }}>
+            <Icon name="plus" size={14} /> New Tag
+          </button>
+        )}
+
+        <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 8 }}>Your Tags ({list.length})</div>
+        {list.length === 0 && <div style={{ textAlign: "center", padding: "20px 12px", color: t.textMuted, fontSize: 13 }}>None yet — tap "New Tag" to create one.</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {list.map(tag => {
+            const cfg = tagRenderCfg(tag);
+            return (
+              <div key={tag.id} style={{ display: "flex", alignItems: "center", gap: 10, background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "10px 12px" }}>
+                <span style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+                  {tag.emoji} {tag.label}
+                </span>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => startEdit(tag)} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Edit</button>
+                <button onClick={() => deleteTag(tag.id)} style={{ background: "transparent", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Delete</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Fix #17: Inline Tag Editor for the Log flow ───────────────────────
-function LogTagEditor({ labels, onChange }) {
+function LogTagEditor({ labels, onChange, customTags, onManage }) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const active = labels || [];
-  const activeCfgs = active.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
+  const merged = allLabels(customTags);
+  const activeCfgs = active.map(id => merged.find(l => l.id === id)).filter(Boolean).map(tagRenderCfg);
   const toggle = (id) => {
     let next;
     if (active.includes(id)) next = active.filter(l => l !== id);
@@ -3632,13 +3758,17 @@ function LogTagEditor({ labels, onChange }) {
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <span style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Pick tags</span>
-            <span style={{ fontSize: 10, color: t.textMuted }}>{active.length}/{TAG_CAP}</span>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {onManage && <button onClick={onManage} style={{ background: "transparent", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>Manage</button>}
+              <span style={{ fontSize: 10, color: t.textMuted }}>{active.length}/{TAG_CAP}</span>
+            </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {WORKOUT_LABELS.map(l => {
+            {merged.map(l => {
+              const cfg = tagRenderCfg(l);
               const isActive = active.includes(l.id);
               return (
-                <button key={l.id} onClick={() => toggle(l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 10, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && active.length >= TAG_CAP) ? 0.4 : 1, minHeight: 36, touchAction: "manipulation" }}>
+                <button key={l.id} onClick={() => toggle(l.id)} style={{ background: isActive ? cfg.bg : "transparent", border: `1px solid ${isActive ? cfg.border : t.border}`, color: isActive ? cfg.color : t.textMuted, borderRadius: 10, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && active.length >= TAG_CAP) ? 0.4 : 1, minHeight: 36, touchAction: "manipulation" }}>
                   {l.emoji} {l.label}
                 </button>
               );
@@ -3688,6 +3818,7 @@ export default function App() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [showProgramBrowser, setShowProgramBrowser] = useState(false);
+  const [showManageTags, setShowManageTags] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -4013,7 +4144,7 @@ export default function App() {
             </TopActions>
           </div>
 
-          {workout && <LogTagEditor labels={workout.labels} onChange={next => setWorkout(w => ({ ...w, labels: next }))} />}
+          {workout && <LogTagEditor labels={workout.labels} customTags={data.customTags} onManage={() => setShowManageTags(true)} onChange={next => setWorkout(w => ({ ...w, labels: next }))} />}
 
           <RestTimer />
 
@@ -4234,6 +4365,7 @@ export default function App() {
               {group.items.map(({ workout: w, index: i }) => (
                 <div key={i} id={`hcard-${i}`} style={{ scrollMarginTop: 48, animation: "bl-card-in 0.3s ease both", animationDelay: `${Math.min(i, 8) * 50}ms` }}>
                   <WorkoutHistoryCard workout={w} index={i}
+                    customTags={data.customTags}
                     onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
                     onDelete={(idx) => save({ ...data, workouts: data.workouts.filter((_, j) => j !== idx) })}
                     onSaveTemplate={(src) => {
@@ -4565,9 +4697,10 @@ export default function App() {
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} onManageTags={() => { setShowSettings(false); setShowManageTags(true); }} />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} />}
+      {showManageTags && <ManageTagsModal customTags={data.customTags} onClose={() => setShowManageTags(false)} onChange={(next) => save({ ...data, customTags: next })} />}
       {showProgramBrowser && <ProgramBrowser
         onClose={() => setShowProgramBrowser(false)}
         onFork={(program, w) => {
