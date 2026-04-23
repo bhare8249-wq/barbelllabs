@@ -14,6 +14,7 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from "firebase/auth";
+import { HELP_CONTENT } from "./helpContent";
 
 // ── Theme ─────────────────────────────────────────────────────────────
 const ThemeCtx = createContext("dark");
@@ -146,8 +147,8 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.22";
-const BUILD_DATE  = "2026-04-22";
+const APP_VERSION = "2.4.23";
+const BUILD_DATE  = "2026-04-23";
 
 function useStorage(uid) {
   const [data, setData] = useState({ workouts: [], bodyweight: [] });
@@ -905,84 +906,24 @@ const Icon = ({ name, size = 18, color }) => {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{p[name]}</svg>;
 };
 
-// ── Help Content ──────────────────────────────────────────────────────
-const HELP_CONTENT = {
-  home: {
-    title: "Home",
-    emoji: "🏠",
-    sections: [
-      { heading: "Quick Stats", body: "Total workouts, this-week count, and unique exercises at a glance." },
-      { heading: "Start a Session", body: "Tap '+ Start Workout' to jump into the Log tab. Your workout timer starts right away." },
-      { heading: "Notifications 🔔", body: "The bell in the top-right shows PR unlocks, streak milestones (3/7/14/30/60/100 days), and a nudge if you've been away for more than 3 days." },
-      { heading: "Help & Settings", body: "The ? icon opens contextual help on any screen. Settings lives under the gear ⚙ on your Profile tab (top-right)." },
-    ],
-  },
-  log: {
-    title: "Log",
-    emoji: "📋",
-    sections: [
-      { heading: "Quick Start", body: "When a workout is empty, shortcuts appear: Repeat Last Session, Browse Starter Programs (PPL, 5/3/1, StrongLifts…), recent template rows, or a 'Recent' row of your most-used exercises." },
-      { heading: "Tag the Workout", body: "Once you add an exercise, the Tags bar at the top auto-suggests (Push / Pull / Legs / Upper / Core / Cardio). Tap the + to open the picker — up to 5 tags per workout. Manage your own custom tags via Settings → Manage Tags." },
-      { heading: "Add an Exercise", body: "Tap 'Add Exercise' to open the picker with search, muscle-group and equipment filters. Filter pills reorder based on what you use most. You can also type a brand-new name to add a custom exercise." },
-      { heading: "Log Your Sets", body: "Enter weight and reps, tap '+ Add Set' for more. Swipe left on a set row or tap the ✕ to delete it. Tap the RPE chip to rate effort (6–10) and set Reps in Reserve." },
-      { heading: "AI Coach", body: "Each exercise shows a Coach card with a target based on your history. Tap 'Apply' to pre-fill the suggestion, or dismiss it." },
-      { heading: "Tools ⋯", body: "The ⋯ icon in the top-right opens Tools: 1RM Calculator and Plate Calculator." },
-      { heading: "Rest Timer", body: "Pick a preset (30s–3m) or a custom time and tap Start. The ring turns green when rest is done." },
-    ],
-  },
-  history: {
-    title: "History",
-    emoji: "📅",
-    sections: [
-      { heading: "Grouped by Period", body: "Workouts are bucketed into This Week / Last Week / specific months. Section headers stick to the top as you scroll." },
-      { heading: "Search & Filter", body: "Use the search box to find workouts containing a specific exercise. The Jump-to picker scrolls to any section or lets you filter by Last 7/14/21/30/90 days or a custom date range." },
-      { heading: "Edit Tags", body: "Tap a workout card to expand. The Tags line shows what's applied — tap 'Edit' to change. Most users tag from the Log screen while logging, but History edits work as a fallback." },
-      { heading: "Swipe to Delete", body: "Swipe a workout card left to reveal a red Delete action. Tap to remove." },
-      { heading: "Export ⋯", body: "Tap the ⋯ icon in the top-right to export your workouts as a CSV (Date · Workout Name · Tags · Exercise · Set # · Weight · Reps · RPE · Notes · Duration). If you have filters active, you can export just the filtered set or everything." },
-    ],
-  },
-  progress: {
-    title: "Progress",
-    emoji: "📈",
-    sections: [
-      { heading: "Your Top Lifts", body: "Bench, Squat, and Deadlift records sit up top. The heaviest gets a 'TOP PR' badge. You can customize which lifts appear." },
-      { heading: "Scrub the Chart", body: "Touch and drag across any graph to scrub through sessions and see exact weight, reps, and date." },
-      { heading: "The Crown 👑", body: "The orange crown marks your current PR — weight AND reps combined at that weight." },
-      { heading: "Jump To", body: "Use the dropdown at the top to jump to any exercise chart." },
-    ],
-  },
-  profile: {
-    title: "Profile",
-    emoji: "👤",
-    sections: [
-      { heading: "Edit Profile", body: "Tap the gear ⚙ and pick 'Edit Profile' to update your name, age, weight, height, and goal. Save when you're done." },
-      { heading: "Goals", body: "Pick a training goal (Muscle, Strength, Cardio, Cut, Maintain) — it shapes how future features tailor suggestions." },
-      { heading: "Settings ⚙", body: "The gear opens Settings with sections for Profile, Tags, Appearance, Account Security, and Data & Privacy." },
-      { heading: "Manage Tags", body: "Create your own workout tags (name + emoji + color) via Settings → Manage Tags. Custom tags appear alongside the built-ins everywhere you can tag a workout." },
-      { heading: "Export Data", body: "Settings → Data & Privacy → Export Workouts (CSV) downloads your full history. You can also export from History's ⋯ menu." },
-      { heading: "Lifetime Stats", body: "Total workouts, sets, exercises, and weekly activity, calculated live from your logged data." },
-    ],
-  },
-  manual: {
-    title: "User Manual",
-    emoji: "📖",
-    sections: [
-      { heading: "Getting Started", body: "Create an account on the landing page with a username, email, and a strong password (8+ characters, uppercase, lowercase, digit). After signup we'll email a verification link — confirm it to unlock the app, then set up your Profile." },
-      { heading: "Your First Workout", body: "Tap the Log tab or '+ Start Workout' on Home. Add exercises using the search picker, enter your sets with weight and reps, use the rest timer between sets, then tap 'Finish Workout' to save." },
-      { heading: "Browse Starter Programs", body: "On the Log tab when no workout is in progress, tap 'Browse Starter Programs' to fork from PPL, Upper/Lower, Full Body, Bro Split, 5/3/1 BBB, Starting Strength, StrongLifts 5×5, PHUL, PHAT, or Arnold Split. 'Start Now' loads it as a live workout; 'Save to Templates' keeps it in your library." },
-      { heading: "Tracking Progress", body: "The Progress tab builds charts from your logged data. The more sessions you log, the more detailed your progression graphs become. PR unlocks and streak milestones also show in your Notifications (🔔 on Home)." },
-      { heading: "Tags vs Templates", body: "Tags (Push, Legs, custom…) label the *kind* of workout and are applied during logging. Templates are reusable workout *structures* saved from a finished session — load one to pre-fill a workout's exercises. Different tools, different jobs." },
-      { heading: "Data & Privacy", body: "Your data syncs to your account via Firebase. Email verification is required before you can log in. You can export a full CSV any time (Profile → Settings → Data & Privacy, or History ⋯ menu)." },
-      { heading: "Exporting Your Data", body: "Either History (⋯ icon top-right → Export Workouts) or Profile → Settings → Data & Privacy. The CSV has full columns (Date · Workout Name · Tags · Exercise · Set # · Weight · Reps · RPE · Notes · Duration) and opens cleanly in Excel, Google Sheets, or Numbers. If you have a History filter active, you can choose to export just the filtered set." },
-    ],
-  },
-};
 
 // ── Help Modal ────────────────────────────────────────────────────────
-function HelpModal({ page, onClose }) {
+function HelpModal({ page, onClose, onReplayTour }) {
   const t = useT();
+  const [versionCopied, setVersionCopied] = useState(false);
   const content = HELP_CONTENT[page];
   if (!content) return null;
+  // Fix #30: tap version string → clipboard copy with toast
+  const copyVersion = async () => {
+    const text = `Barbell Labs v${APP_VERSION} · Built ${BUILD_DATE}`;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+      else { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+      haptic(8);
+      setVersionCopied(true);
+      setTimeout(() => setVersionCopied(false), 1600);
+    } catch {}
+  };
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
       onClick={onClose}>
@@ -1023,10 +964,15 @@ function HelpModal({ page, onClose }) {
               <div style={{ fontSize: 13, color: t.textSub, lineHeight: 1.65, paddingLeft: 11 }}>{s.body}</div>
             </div>
           ))}
-          <div style={{ textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
-            <div style={{ fontSize: 11, color: t.textMuted }}>
-              Barbell Labs v{APP_VERSION} · Built {BUILD_DATE}
-            </div>
+          <div style={{ textAlign: "center", paddingTop: 8, paddingBottom: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            {onReplayTour && (
+              <button onClick={onReplayTour} style={{ background: "transparent", border: "none", color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "4px 8px", fontFamily: "inherit" }}>
+                Replay intro tour
+              </button>
+            )}
+            <button onClick={copyVersion} style={{ background: "transparent", border: "none", color: versionCopied ? accent : t.textMuted, fontSize: 11, cursor: "pointer", padding: "4px 8px", fontFamily: "inherit", transition: "color 0.2s" }}>
+              {versionCopied ? "✓ Copied to clipboard" : <>Barbell Labs v{APP_VERSION} · Built {BUILD_DATE}</>}
+            </button>
           </div>
         </div>
       </div>
@@ -3345,6 +3291,59 @@ function StatCard({ icon, color, label, value }) {
 }
 
 // ── Verify-Email Gate (blocks app until email is verified) ────────────
+// ── Fix #28: First-run onboarding tour ────────────────────────────────
+const ONBOARDING_STEPS = [
+  {
+    emoji: "👋",
+    title: "Welcome to Barbell Labs",
+    body: "A quick 30-second tour of how to log, track, and improve your lifts. You can replay this anytime from any Help sheet.",
+  },
+  {
+    emoji: "📝",
+    title: "Log your workouts",
+    body: "The Log tab is where every session lives. Start a workout, add exercises, enter weight × reps — the Coach card suggests your next target from your history.",
+  },
+  {
+    emoji: "🕒",
+    title: "Review + tag your history",
+    body: "The History tab groups your past sessions and lets you tag them (Push, Pull, custom…). Search by exercise, filter by date range, and export your full history to CSV.",
+  },
+  {
+    emoji: "📈",
+    title: "Track progression + PRs",
+    body: "Progress charts your lifts over time with a crown on every new PR. The bell on Home also notifies you when you unlock a new record or hit a streak milestone.",
+  },
+];
+
+function OnboardingTour({ onDone }) {
+  const t = useT();
+  const [step, setStep] = useState(0);
+  const s = ONBOARDING_STEPS[step];
+  const isLast = step === ONBOARDING_STEPS.length - 1;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 2500, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px" }}>
+      <div style={{ width: "100%", maxWidth: 360, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 20, padding: "28px 24px", textAlign: "center", boxShadow: "0 12px 48px rgba(0,0,0,0.6)" }}>
+        <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 14 }}>{s.emoji}</div>
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1.5, color: t.text, marginBottom: 10 }}>{s.title}</div>
+        <div style={{ color: t.textSub, fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>{s.body}</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 20 }}>
+          {ONBOARDING_STEPS.map((_, i) => (
+            <span key={i} style={{ width: i === step ? 22 : 7, height: 7, borderRadius: 4, background: i === step ? accent : t.border, transition: "all 0.2s" }} />
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onDone} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 12, padding: "12px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" }}>
+            {isLast ? "Close" : "Skip"}
+          </button>
+          <button onClick={() => isLast ? onDone() : setStep(step + 1)} style={{ flex: 2, background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, border: "none", color: "#fff", borderRadius: 12, padding: "12px 0", fontSize: 15, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: "pointer", touchAction: "manipulation" }}>
+            {isLast ? "LET'S GO" : "NEXT"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VerifyEmailScreen({ user, onSignOut }) {
   const [sent, setSent] = useState(false);
   const [err,  setErr]  = useState(null);
@@ -3886,6 +3885,7 @@ export default function App() {
   const [historyRange, setHistoryRange] = useState(null); // { from: "YYYY-MM-DD", to: "YYYY-MM-DD" }
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const [showTour, setShowTour] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -3923,6 +3923,15 @@ export default function App() {
     if (update) save({ ...data, ...update });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseUser?.uid, (data.workouts || []).length]);
+
+  // Fix #28 — first-run onboarding tour when profile.onboarded is falsy
+  useEffect(() => {
+    if (!firebaseUser) return;
+    if (!data || data.profile === undefined) return;
+    if (data.profile?.onboarded) return;
+    setShowTour(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseUser?.uid, data?.profile?.onboarded]);
 
   // Fix #17 — auto-suggest tags once on first exercise add; user controls after
   useEffect(() => {
@@ -4845,7 +4854,7 @@ export default function App() {
       </div>{/* end animated view wrapper */}
 
       {/* ── HELP MODAL ───────────────────── */}
-      {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
+      {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} onReplayTour={() => { setHelpPage(null); setShowTour(true); }} />}
       {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
@@ -4854,6 +4863,7 @@ export default function App() {
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} />}
       {showManageTags && <ManageTagsModal customTags={data.customTags} onClose={() => setShowManageTags(false)} onChange={(next) => save({ ...data, customTags: next })} />}
+      {showTour && <OnboardingTour onDone={() => { setShowTour(false); save({ ...data, profile: { ...(data.profile || {}), onboarded: true } }); }} />}
       {showHistoryMenu && <HistoryMenu
         onClose={() => setShowHistoryMenu(false)}
         onExportAll={() => exportCSV("all")}
