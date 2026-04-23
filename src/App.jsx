@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.13";
+const APP_VERSION = "2.4.14";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -3705,6 +3705,25 @@ export default function App() {
     if (exSearch && !ex.name.toLowerCase().includes(exSearch.toLowerCase())) return false;
     return true;
   });
+  // Fix #15: sort filter pills by this user's usage frequency ("All" always first)
+  const orderedCats = (() => {
+    const freq = {};
+    (data.workouts || []).forEach(w => w.exercises.forEach(ex => {
+      const hit = GYM_BIBLE.find(g => g.name === ex.name);
+      if (hit) freq[hit.cat] = (freq[hit.cat] || 0) + 1;
+    }));
+    const [allCat, ...rest] = EX_CATS;
+    return [allCat, ...rest.slice().sort((a, b) => (freq[b.id] || 0) - (freq[a.id] || 0))];
+  })();
+  const orderedEquips = (() => {
+    const freq = {};
+    (data.workouts || []).forEach(w => w.exercises.forEach(ex => {
+      const hit = GYM_BIBLE.find(g => g.name === ex.name);
+      if (hit) freq[hit.equip] = (freq[hit.equip] || 0) + 1;
+    }));
+    const [allEq, ...rest] = EX_EQUIPS;
+    return [allEq, ...rest.slice().sort((a, b) => (freq[b.id] || 0) - (freq[a.id] || 0))];
+  })();
 
   const progressData = (exName) =>
     data.workouts.filter(w => w.exercises.some(e => e.name === exName))
@@ -3954,30 +3973,30 @@ export default function App() {
                 <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
-              {/* Category filter chips */}
+              {/* Category filter chips (Fix #15: reordered by usage, snap-aligned, fade into surfaceHigh) */}
               <div style={{ position: "relative", marginBottom: 8 }}>
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                  {EX_CATS.map(c => {
+                <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
+                  {orderedCats.map(c => {
                     const active = exCatFilter === c.id;
                     const darkText = active && c.color && ["#ffe66d","#a8e6cf","#c3a6ff","#ffd93d"].includes(c.color);
                     return (
-                      <button key={c.id} onClick={() => setExCatFilter(c.id)} style={{ flexShrink: 0, padding: "10px 16px", borderRadius: 22, border: `1.5px solid ${active ? (c.color || accent) : t.border}`, background: active ? (c.color || accent) : t.surface, color: active ? (darkText ? "#111" : "#fff") : t.textSub, fontSize: 14, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none" }}>{c.label}</button>
+                      <button key={c.id} onClick={() => setExCatFilter(c.id)} style={{ flexShrink: 0, padding: "10px 16px", borderRadius: 22, border: `1.5px solid ${active ? (c.color || accent) : t.border}`, background: active ? (c.color || accent) : t.surface, color: active ? (darkText ? "#111" : "#fff") : t.textSub, fontSize: 14, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none", scrollSnapAlign: "start" }}>{c.label}</button>
                     );
                   })}
                 </div>
-                <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, transparent, ${t.cardBg || t.surface})`, pointerEvents: "none" }} />
+                <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, ${t.surfaceHigh}00, ${t.surfaceHigh})`, pointerEvents: "none" }} />
               </div>
               {/* Equipment filter chips */}
               <div style={{ position: "relative", marginBottom: 8 }}>
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                  {EX_EQUIPS.map(eq => {
+                <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
+                  {orderedEquips.map(eq => {
                     const active = exEquipFilter === eq.id;
                     return (
-                      <button key={eq.id} onClick={() => setExEquipFilter(eq.id)} style={{ flexShrink: 0, padding: "9px 15px", borderRadius: 22, border: `1.5px solid ${active ? accent : t.border}`, background: active ? `${accent}20` : t.surface, color: active ? accent : t.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none" }}>{eq.label}</button>
+                      <button key={eq.id} onClick={() => setExEquipFilter(eq.id)} style={{ flexShrink: 0, padding: "9px 15px", borderRadius: 22, border: `1.5px solid ${active ? accent : t.border}`, background: active ? `${accent}20` : t.surface, color: active ? accent : t.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none", scrollSnapAlign: "start" }}>{eq.label}</button>
                     );
                   })}
                 </div>
-                <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, transparent, ${t.cardBg || t.surface})`, pointerEvents: "none" }} />
+                <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, ${t.surfaceHigh}00, ${t.surfaceHigh})`, pointerEvents: "none" }} />
               </div>
               {/* Results list */}
               <div style={{ maxHeight: 240, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>

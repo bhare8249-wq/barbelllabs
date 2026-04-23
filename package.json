@@ -1,6 +1,6 @@
 {
   "name": "barbelllabs",
-  "version": "2.4.13",
+  "version": "2.4.14",
   "private": true,
   "dependencies": {
     "@capacitor/android": "^8.3.1",
