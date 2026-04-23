@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.15";
+const APP_VERSION = "2.4.16";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -728,6 +728,31 @@ const EX_EQUIPS = [
   { id: "other",      label: "Other" },
 ];
 const CAT_COLORS = { chest:"#E67E6B", back:"#4A9EB8", shoulders:"#D4A64E", arms:"#7FB069", legs:"#9E7ABF", core:"#D96B7A", cardio:"#E8B64C", full:"#5BB588", custom:"#888" };
+// Fix #17/#19: auto-suggest workout tags based on exercise categories
+const TAG_CAP = 5;
+function suggestTags(exercises) {
+  if (!exercises || exercises.length === 0) return [];
+  const cats = new Set();
+  exercises.forEach(ex => {
+    const hit = GYM_BIBLE.find(g => g.name === ex.name);
+    if (hit) cats.add(hit.cat);
+  });
+  const hasChest = cats.has("chest");
+  const hasBack = cats.has("back");
+  const hasShoulders = cats.has("shoulders");
+  const hasLegs = cats.has("legs");
+  const hasArms = cats.has("arms");
+  const hasCore = cats.has("core");
+  const tags = [];
+  if (hasChest || hasShoulders) tags.push("push");
+  if (hasBack) tags.push("pull");
+  if (hasLegs) tags.push("legs");
+  if ((hasChest || hasShoulders) && hasBack) tags.push("upperbody");
+  if (hasArms && !hasChest && !hasShoulders && !hasBack) tags.push("arms");
+  if (hasCore) tags.push("abs");
+  return tags.slice(0, TAG_CAP);
+}
+
 const WORKOUT_LABELS = [
   { id: "legs",      label: "Legs",       emoji: "🦵", color: "#5bb85b", bg: "rgba(91,184,91,0.12)",  border: "rgba(91,184,91,0.3)" },
   { id: "push",      label: "Push",       emoji: "💪", color: "#5b9bd5", bg: "rgba(91,155,213,0.12)", border: "rgba(91,155,213,0.3)" },
@@ -2059,6 +2084,7 @@ function groupWorkoutsByPeriod(workouts) {
 function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTemplate }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [editingTags, setEditingTags] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const swipeTouchX = useRef(null);
   const startOffset = useRef(0);
@@ -2069,7 +2095,7 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
   const activeCfgs = activeLabels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
   const toggleLabel = (e, id) => {
     e.stopPropagation();
-    let next = activeLabels.includes(id) ? activeLabels.filter(l => l !== id) : activeLabels.length >= 3 ? [...activeLabels.slice(1), id] : [...activeLabels, id];
+    let next = activeLabels.includes(id) ? activeLabels.filter(l => l !== id) : activeLabels.length >= TAG_CAP ? [...activeLabels.slice(1), id] : [...activeLabels, id];
     onLabelChange(index, next);
   };
 
@@ -2133,23 +2159,34 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
           </div>
           {open && (
             <div style={{ padding: "0 16px 14px" }}>
-              {/* Tag picker */}
-              <div style={{ marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Tag this workout</div>
-                  <div style={{ fontSize: 10, color: t.textMuted }}>{activeLabels.length}/3 selected</div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {WORKOUT_LABELS.map(l => {
-                    const isActive = activeLabels.includes(l.id);
-                    return (
-                      <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 10, padding: "11px 16px", fontSize: 14, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= 3) ? 0.4 : 1, minHeight: 44, touchAction: "manipulation" }}>
-                        {l.emoji} {l.label}{isActive && <span style={{ fontSize: 10, marginLeft: 1, opacity: 0.7 }}>✕</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+              {/* Fix #21: compact Tags line with [edit] to expand the picker */}
+              <div style={{ marginBottom: 12, paddingTop: 12, borderTop: `1px solid ${t.border}`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Tags</span>
+                <span style={{ fontSize: 13, color: activeCfgs.length ? t.textSub : t.textMuted, flex: 1, minWidth: 0 }}>
+                  {activeCfgs.length ? activeCfgs.map(c => c.label).join(", ") : "None — add some"}
+                </span>
+                <button onClick={(e) => { e.stopPropagation(); setEditingTags(v => !v); }} style={{ background: "transparent", border: "none", color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "4px 6px" }}>
+                  {editingTags ? "Done" : "Edit"}
+                </button>
               </div>
+              {editingTags && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Pick tags</div>
+                    <div style={{ fontSize: 10, color: t.textMuted }}>{activeLabels.length}/{TAG_CAP}</div>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {WORKOUT_LABELS.map(l => {
+                      const isActive = activeLabels.includes(l.id);
+                      return (
+                        <button key={l.id} onClick={(e) => toggleLabel(e, l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 10, padding: "10px 14px", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s", opacity: (!isActive && activeLabels.length >= TAG_CAP) ? 0.4 : 1, minHeight: 40, touchAction: "manipulation" }}>
+                          {l.emoji} {l.label}{isActive && <span style={{ fontSize: 10, marginLeft: 1, opacity: 0.7 }}>✕</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {/* Sets */}
               {workout.exercises.map((ex, j) => (
                 <div key={j} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: j < workout.exercises.length - 1 ? `1px solid ${t.border}` : "none" }}>
@@ -3557,6 +3594,62 @@ function NotificationsModal({ notifications, onClose, onMarkAllRead, onClearAll,
   );
 }
 
+// ── Fix #17: Inline Tag Editor for the Log flow ───────────────────────
+function LogTagEditor({ labels, onChange }) {
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
+  const active = labels || [];
+  const activeCfgs = active.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
+  const toggle = (id) => {
+    let next;
+    if (active.includes(id)) next = active.filter(l => l !== id);
+    else if (active.length >= TAG_CAP) next = [...active.slice(1), id];
+    else next = [...active, id];
+    onChange(next);
+  };
+  const clearTag = (id) => onChange(active.filter(l => l !== id));
+
+  return (
+    <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "10px 12px", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, flexShrink: 0 }}>Tags</span>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+          {activeCfgs.length === 0 && (
+            <span style={{ fontSize: 12, color: t.textMuted }}>auto-suggested once you add exercises</span>
+          )}
+          {activeCfgs.map(c => (
+            <button key={c.id} onClick={() => clearTag(c.id)} style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.color, borderRadius: 8, padding: "4px 9px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4, cursor: "pointer", whiteSpace: "nowrap", touchAction: "manipulation" }}>
+              {c.emoji} {c.label}
+              <span style={{ opacity: 0.6, marginLeft: 1 }}>✕</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setExpanded(v => !v)} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 8, width: 30, height: 30, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}>
+          <Icon name={expanded ? "x" : "plus"} size={14} />
+        </button>
+      </div>
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Pick tags</span>
+            <span style={{ fontSize: 10, color: t.textMuted }}>{active.length}/{TAG_CAP}</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {WORKOUT_LABELS.map(l => {
+              const isActive = active.includes(l.id);
+              return (
+                <button key={l.id} onClick={() => toggle(l.id)} style={{ background: isActive ? l.bg : "transparent", border: `1px solid ${isActive ? l.border : t.border}`, color: isActive ? l.color : t.textMuted, borderRadius: 10, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s", opacity: (!isActive && active.length >= TAG_CAP) ? 0.4 : 1, minHeight: 36, touchAction: "manipulation" }}>
+                  {l.emoji} {l.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
@@ -3632,6 +3725,17 @@ export default function App() {
     if (update) save({ ...data, ...update });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseUser?.uid, (data.workouts || []).length]);
+
+  // Fix #17 — auto-suggest tags once on first exercise add; user controls after
+  useEffect(() => {
+    if (!workout) return;
+    if (workout.labels !== undefined) return;
+    if (!workout.exercises || workout.exercises.length === 0) return;
+    const suggested = suggestTags(workout.exercises);
+    if (suggested.length === 0) return;
+    setWorkout(w => w && w.labels === undefined ? { ...w, labels: suggested } : w);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workout?.exercises?.length]);
 
   useEffect(() => {
     const color = theme === "dark" ? "#0A0A0A" : "#FFFFFF";
@@ -3908,6 +4012,8 @@ export default function App() {
               <HelpBtn page="log" onOpen={() => setHelpPage("log")} />
             </TopActions>
           </div>
+
+          {workout && <LogTagEditor labels={workout.labels} onChange={next => setWorkout(w => ({ ...w, labels: next }))} />}
 
           <RestTimer />
 
