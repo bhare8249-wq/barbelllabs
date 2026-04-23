@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.6";
+const APP_VERSION = "2.4.7";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -2505,9 +2505,50 @@ function calcPlates(target, barWeight, unit) {
 }
 
 // ── Templates ─────────────────────────────────────────────────────────
-function SaveTemplateSheet({ exercises, onSave, onClose }) {
+// ── Fix #9: Smart template-name suggestion ────────────────────────────
+function suggestTemplateName(exercises, existingTemplates = [], workoutDate = null) {
+  const cats = exercises.map(ex => {
+    const hit = GYM_BIBLE.find(g => g.name === ex.name);
+    return hit?.cat || "custom";
+  });
+  const n = (c) => cats.filter(x => x === c).length;
+  const upperN = n("chest") + n("back") + n("shoulders") + n("arms");
+  const legsN = n("legs");
+  const coreN = n("core");
+
+  let base;
+  if (upperN > 0 && legsN > 0) {
+    base = "Full Body";
+  } else if (legsN > 0) {
+    base = "Leg Day";
+  } else if (n("chest") + n("shoulders") > 0 && n("back") === 0) {
+    base = "Push Day";
+  } else if (n("back") > 0 && n("chest") + n("shoulders") === 0) {
+    base = "Pull Day";
+  } else if (upperN > 0) {
+    base = "Upper Body";
+  } else if (coreN > 0) {
+    base = "Core Day";
+  } else if (workoutDate) {
+    base = new Date(workoutDate).toLocaleDateString("en-US", { weekday: "long" }) + " Workout";
+  } else {
+    base = "Workout";
+  }
+
+  const taken = new Set(existingTemplates.map(t => t.name));
+  if (!taken.has(base)) return base;
+  for (let i = 0; i < 26; i++) {
+    const cand = `${base} ${String.fromCharCode(65 + i)}`;
+    if (!taken.has(cand)) return cand;
+  }
+  let k = 2;
+  while (taken.has(`${base} ${k}`)) k++;
+  return `${base} ${k}`;
+}
+
+function SaveTemplateSheet({ exercises, existingTemplates, onSave, onClose }) {
   const t = useT(); const S = useS();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => suggestTemplateName(exercises, existingTemplates || []));
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 36px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
@@ -2522,6 +2563,7 @@ function SaveTemplateSheet({ exercises, onSave, onClose }) {
         <input
           value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Push Day, Leg Day A…"
           autoFocus maxLength={40}
+          onFocus={e => e.target.select()}
           onKeyDown={e => e.key === "Enter" && name.trim() && onSave(name.trim())}
           style={{ ...S.inputStyle({ width: "100%", fontSize: 16, padding: "12px 14px", borderRadius: 12, marginBottom: 18 }) }}
         />
@@ -3508,7 +3550,7 @@ export default function App() {
                 onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
                 onDelete={(idx) => save({ ...data, workouts: data.workouts.filter((_, j) => j !== idx) })}
                 onSaveTemplate={(src) => {
-                  const name = src.exercises.map(e => e.name).join(", ").slice(0, 30);
+                  const name = suggestTemplateName(src.exercises, templates, src.date);
                   const tmpl = { id: Date.now().toString(), name, exercises: src.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
                   save({ ...data, templates: [...templates, tmpl] });
                 }}
@@ -3831,7 +3873,7 @@ export default function App() {
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
       {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
-      {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
+      {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
