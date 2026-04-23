@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.9";
+const APP_VERSION = "2.4.10";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -1725,6 +1725,34 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts }) {
 }
 
 // ── History Card ──────────────────────────────────────────────────────
+// ── Fix #11: Group workouts into "This Week / Last Week / Month Year" ─
+function groupWorkoutsByPeriod(workouts) {
+  const now = new Date();
+  const startOfThisWeek = new Date(now);
+  startOfThisWeek.setDate(now.getDate() - now.getDay());
+  startOfThisWeek.setHours(0, 0, 0, 0);
+  const startOfLastWeek = new Date(startOfThisWeek);
+  startOfLastWeek.setDate(startOfThisWeek.getDate() - 7);
+
+  const map = new Map();
+  const order = [];
+  workouts.forEach((w, i) => {
+    const d = new Date(w.date);
+    d.setHours(0, 0, 0, 0);
+    let key;
+    if (d >= startOfThisWeek) key = "This Week";
+    else if (d >= startOfLastWeek) key = "Last Week";
+    else key = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    if (!map.has(key)) { map.set(key, []); order.push(key); }
+    map.get(key).push({ workout: w, index: i });
+  });
+  return order.map(label => ({
+    label,
+    id: "hsec-" + label.replace(/\s+/g, "-").toLowerCase(),
+    items: map.get(label),
+  }));
+}
+
 function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTemplate }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -3613,7 +3641,31 @@ export default function App() {
       )}
 
       {/* ── HISTORY ──────────────────────── */}
-      {view === "history" && (
+      {view === "history" && (() => {
+        const historyGroups = groupWorkoutsByPeriod(data.workouts);
+        const recencyOpts = [
+          { value: "7",  label: "Last 7 days"  },
+          { value: "14", label: "Last 14 days" },
+          { value: "21", label: "Last 21 days" },
+          { value: "30", label: "Last 30 days" },
+        ];
+        const handleJump = (e) => {
+          const v = e.target.value;
+          e.target.value = "";
+          if (!v) return;
+          if (v.startsWith("sec:")) {
+            const el = document.getElementById(v.slice(4));
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+          const days = parseInt(v);
+          if (days) {
+            const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+            const idx = data.workouts.findIndex(w => new Date(w.date) >= cutoff);
+            if (idx !== -1) { const el = document.getElementById(`hcard-${idx}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+          }
+        };
+        return (
         <div style={{ padding: "52px 20px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -3622,17 +3674,18 @@ export default function App() {
             </div>
             {data.workouts.length > 0 && (
               <div style={{ position: "relative", display: "inline-block" }}>
-                <select defaultValue="" onChange={e => {
-                  const days = parseInt(e.target.value); if (!days) return;
-                  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
-                  const idx = data.workouts.findIndex(w => new Date(w.date) >= cutoff);
-                  if (idx !== -1) { const el = document.getElementById(`hcard-${idx}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
-                  e.target.value = "";
-                }} style={sel({ fontSize: 11 })}>
+                <select defaultValue="" onChange={handleJump} style={sel({ fontSize: 11 })}>
                   <option value="" disabled>Jump to…</option>
-                  <option value="7"  style={{ background: t.surfaceHigh, color: t.text }}>Last 7 days</option>
-                  <option value="14" style={{ background: t.surfaceHigh, color: t.text }}>Last 14 days</option>
-                  <option value="21" style={{ background: t.surfaceHigh, color: t.text }}>Last 21 days</option>
+                  <optgroup label="Sections">
+                    {historyGroups.map(g => (
+                      <option key={g.id} value={`sec:${g.id}`} style={{ background: t.surfaceHigh, color: t.text }}>{g.label} ({g.items.length})</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Recency">
+                    {recencyOpts.map(o => (
+                      <option key={o.value} value={o.value} style={{ background: t.surfaceHigh, color: t.text }}>{o.label}</option>
+                    ))}
+                  </optgroup>
                 </select>
                 <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: accent, display: "flex" }}><Icon name="chevronDown" size={12} /></span>
               </div>
@@ -3650,17 +3703,28 @@ export default function App() {
               </button>
             </div>
           )}
-          {data.workouts.map((w, i) => (
-            <div key={i} id={`hcard-${i}`} style={{ scrollMarginTop: 16, animation: "bl-card-in 0.3s ease both", animationDelay: `${Math.min(i, 8) * 50}ms` }}>
-              <WorkoutHistoryCard workout={w} index={i}
-                onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
-                onDelete={(idx) => save({ ...data, workouts: data.workouts.filter((_, j) => j !== idx) })}
-                onSaveTemplate={(src) => {
-                  const name = suggestTemplateName(src.exercises, templates, src.date);
-                  const tmpl = { id: Date.now().toString(), name, exercises: src.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
-                  save({ ...data, templates: [...templates, tmpl] });
-                }}
-              />
+          {historyGroups.map(group => (
+            <div key={group.id}>
+              <div id={group.id} style={{ position: "sticky", top: 0, zIndex: 10, background: t.bg, padding: "10px 0 6px", marginBottom: 6, scrollMarginTop: 8 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700 }}>{group.label}</div>
+                  <div style={{ flex: 1, height: 1, background: t.border, opacity: 0.6 }} />
+                  <div style={{ fontSize: 11, color: t.textMuted, fontWeight: 600 }}>{group.items.length}</div>
+                </div>
+              </div>
+              {group.items.map(({ workout: w, index: i }) => (
+                <div key={i} id={`hcard-${i}`} style={{ scrollMarginTop: 48, animation: "bl-card-in 0.3s ease both", animationDelay: `${Math.min(i, 8) * 50}ms` }}>
+                  <WorkoutHistoryCard workout={w} index={i}
+                    onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
+                    onDelete={(idx) => save({ ...data, workouts: data.workouts.filter((_, j) => j !== idx) })}
+                    onSaveTemplate={(src) => {
+                      const name = suggestTemplateName(src.exercises, templates, src.date);
+                      const tmpl = { id: Date.now().toString(), name, exercises: src.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
+                      save({ ...data, templates: [...templates, tmpl] });
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           ))}
 
@@ -3697,7 +3761,8 @@ export default function App() {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── PROGRESS ─────────────────────── */}
       {view === "progress" && (
