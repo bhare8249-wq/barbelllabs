@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.6";
+const APP_VERSION = "2.4.8";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -2505,9 +2505,50 @@ function calcPlates(target, barWeight, unit) {
 }
 
 // ── Templates ─────────────────────────────────────────────────────────
-function SaveTemplateSheet({ exercises, onSave, onClose }) {
+// ── Fix #9: Smart template-name suggestion ────────────────────────────
+function suggestTemplateName(exercises, existingTemplates = [], workoutDate = null) {
+  const cats = exercises.map(ex => {
+    const hit = GYM_BIBLE.find(g => g.name === ex.name);
+    return hit?.cat || "custom";
+  });
+  const n = (c) => cats.filter(x => x === c).length;
+  const upperN = n("chest") + n("back") + n("shoulders") + n("arms");
+  const legsN = n("legs");
+  const coreN = n("core");
+
+  let base;
+  if (upperN > 0 && legsN > 0) {
+    base = "Full Body";
+  } else if (legsN > 0) {
+    base = "Leg Day";
+  } else if (n("chest") + n("shoulders") > 0 && n("back") === 0) {
+    base = "Push Day";
+  } else if (n("back") > 0 && n("chest") + n("shoulders") === 0) {
+    base = "Pull Day";
+  } else if (upperN > 0) {
+    base = "Upper Body";
+  } else if (coreN > 0) {
+    base = "Core Day";
+  } else if (workoutDate) {
+    base = new Date(workoutDate).toLocaleDateString("en-US", { weekday: "long" }) + " Workout";
+  } else {
+    base = "Workout";
+  }
+
+  const taken = new Set(existingTemplates.map(t => t.name));
+  if (!taken.has(base)) return base;
+  for (let i = 0; i < 26; i++) {
+    const cand = `${base} ${String.fromCharCode(65 + i)}`;
+    if (!taken.has(cand)) return cand;
+  }
+  let k = 2;
+  while (taken.has(`${base} ${k}`)) k++;
+  return `${base} ${k}`;
+}
+
+function SaveTemplateSheet({ exercises, existingTemplates, onSave, onClose }) {
   const t = useT(); const S = useS();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => suggestTemplateName(exercises, existingTemplates || []));
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 36px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
@@ -2522,6 +2563,7 @@ function SaveTemplateSheet({ exercises, onSave, onClose }) {
         <input
           value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Push Day, Leg Day A…"
           autoFocus maxLength={40}
+          onFocus={e => e.target.select()}
           onKeyDown={e => e.key === "Enter" && name.trim() && onSave(name.trim())}
           style={{ ...S.inputStyle({ width: "100%", fontSize: 16, padding: "12px 14px", borderRadius: 12, marginBottom: 18 }) }}
         />
@@ -3366,7 +3408,7 @@ export default function App() {
                   <Icon name="history" size={14} /> Repeat Last Session
                 </button>
               )}
-              {/* Templates */}
+              {/* Templates — newest 3 inline, rest behind "View all" */}
               {templates.length > 0 && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -3374,12 +3416,17 @@ export default function App() {
                     <button onClick={() => setShowTemplateManager(true)} style={{ background: "transparent", border: "none", color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "2px 0" }}>Manage</button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {templates.map(tmpl => (
+                    {[...templates].reverse().slice(0, 3).map(tmpl => (
                       <button key={tmpl.id} onClick={() => loadTemplate(tmpl)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "12px 16px", textAlign: "left", cursor: "pointer", width: "100%", touchAction: "manipulation" }}>
                         <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 3 }}>{tmpl.name}</div>
                         <div style={{ fontSize: 12, color: t.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tmpl.exercises.map(e => e.name).join(" · ")}</div>
                       </button>
                     ))}
+                    {templates.length > 3 && (
+                      <button onClick={() => setShowTemplateManager(true)} style={{ background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 12, color: t.textSub, padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" }}>
+                        View all {templates.length} templates
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -3451,9 +3498,30 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
-              <Icon name="plus" size={15} /> Add Exercise
-            </button>
+            <>
+              {(() => {
+                const freq = {};
+                (data.workouts || []).slice(0, 10).forEach(w => w.exercises.forEach(ex => { freq[ex.name] = (freq[ex.name] || 0) + 1; }));
+                const already = new Set((workout?.exercises || []).map(e => e.name));
+                const recent = Object.entries(freq).filter(([n]) => !already.has(n)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
+                if (recent.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 6 }}>Recent</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {recent.map(name => (
+                        <button key={name} onClick={() => addExercise(name)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "8px 13px", fontSize: 12, color: t.textSub, cursor: "pointer", touchAction: "manipulation", fontWeight: 600, whiteSpace: "nowrap", minHeight: 36 }}>
+                          + {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
+                <Icon name="plus" size={15} /> Add Exercise
+              </button>
+            </>
           )}
           {workout && workout.exercises.length > 0 && <button onClick={finishWorkout} style={{ ...S.solidBtn(), width: "100%", padding: 14, borderRadius: 12, fontSize: 18, marginTop: 4 }}>Finish Workout</button>}
           {(!workout || workout.exercises.length === 0) && !showExPicker && (
@@ -3508,7 +3576,7 @@ export default function App() {
                 onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
                 onDelete={(idx) => save({ ...data, workouts: data.workouts.filter((_, j) => j !== idx) })}
                 onSaveTemplate={(src) => {
-                  const name = src.exercises.map(e => e.name).join(", ").slice(0, 30);
+                  const name = suggestTemplateName(src.exercises, templates, src.date);
                   const tmpl = { id: Date.now().toString(), name, exercises: src.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
                   save({ ...data, templates: [...templates, tmpl] });
                 }}
@@ -3831,7 +3899,7 @@ export default function App() {
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} />}
       {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
-      {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
+      {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
