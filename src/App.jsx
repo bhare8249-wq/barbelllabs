@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.10";
+const APP_VERSION = "2.4.11";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -403,6 +403,306 @@ const GYM_BIBLE = [
   { name: "Sandbag Carry", cat: "full", equip: "other", level: "intermediate", muscles: "Full Body, Grip, Core" },
   { name: "Tire Flip", cat: "full", equip: "other", level: "advanced", muscles: "Full Posterior Chain, Legs" },
   { name: "Dumbbell Complex", cat: "full", equip: "dumbbell", level: "intermediate", muscles: "Full Body Circuit" },
+];
+
+// ── Fix #12: Starter Program Library ──────────────────────────────────
+// Helper to stamp N empty sets at a given rep prescription.
+const _ps = (reps, n = 3) => Array.from({ length: n }, () => ({ weight: "", reps: String(reps) }));
+const STARTER_PROGRAMS = [
+  {
+    id: "ppl", name: "Push / Pull / Legs", short: "PPL",
+    level: "Intermediate", goal: "Hypertrophy", frequency: "3–6 days/week",
+    description: "Classic hypertrophy split. Each day hits one movement pattern hard — push (chest/shoulders/triceps), pull (back/biceps), or legs. Run 3 days/week minimum; 6 days/week for max volume.",
+    workouts: [
+      { name: "Push Day", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(8, 4) },
+        { name: "Incline Dumbbell Press", sets: _ps(10, 3) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(8, 3) },
+        { name: "Lateral Raise", sets: _ps(12, 3) },
+        { name: "Cable Pushdown (Rope)", sets: _ps(12, 3) },
+        { name: "Overhead Cable Tricep Extension", sets: _ps(12, 3) },
+      ]},
+      { name: "Pull Day", exercises: [
+        { name: "Conventional Deadlift", sets: _ps(5, 3) },
+        { name: "Pull-Up (Overhand)", sets: _ps(8, 3) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(8, 3) },
+        { name: "Lat Pulldown (Wide Grip)", sets: _ps(10, 3) },
+        { name: "Face Pull", sets: _ps(15, 3) },
+        { name: "Barbell Curl", sets: _ps(10, 3) },
+        { name: "Hammer Curl", sets: _ps(12, 3) },
+      ]},
+      { name: "Leg Day", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(8, 4) },
+        { name: "Romanian Deadlift", sets: _ps(8, 3) },
+        { name: "Leg Press", sets: _ps(10, 3) },
+        { name: "Leg Extension", sets: _ps(12, 3) },
+        { name: "Lying Leg Curl", sets: _ps(12, 3) },
+        { name: "Standing Calf Raise Machine", sets: _ps(15, 4) },
+      ]},
+    ],
+  },
+  {
+    id: "upper-lower", name: "Upper / Lower", short: "U/L",
+    level: "Intermediate", goal: "Hypertrophy", frequency: "4 days/week",
+    description: "Balanced split rotating upper and lower body. Great for recovery management — each muscle group hit twice per week.",
+    workouts: [
+      { name: "Upper Day", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(6, 4) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(8, 4) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(8, 3) },
+        { name: "Lat Pulldown (Wide Grip)", sets: _ps(10, 3) },
+        { name: "Lateral Raise", sets: _ps(12, 3) },
+        { name: "Barbell Curl", sets: _ps(10, 3) },
+        { name: "Cable Pushdown (Rope)", sets: _ps(12, 3) },
+      ]},
+      { name: "Lower Day", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(6, 4) },
+        { name: "Romanian Deadlift", sets: _ps(8, 3) },
+        { name: "Leg Press", sets: _ps(10, 3) },
+        { name: "Lying Leg Curl", sets: _ps(12, 3) },
+        { name: "Leg Extension", sets: _ps(12, 3) },
+        { name: "Standing Calf Raise Machine", sets: _ps(15, 4) },
+      ]},
+    ],
+  },
+  {
+    id: "full-body-3x", name: "Full Body 3x/Week", short: "Full Body",
+    level: "Beginner", goal: "General", frequency: "3 days/week",
+    description: "Every major movement pattern each session. Ideal starter template — high frequency per muscle, low total volume per workout. Run Mon/Wed/Fri.",
+    workouts: [
+      { name: "Full Body", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(5, 3) },
+        { name: "Barbell Bench Press", sets: _ps(5, 3) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(8, 3) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(8, 3) },
+        { name: "Romanian Deadlift", sets: _ps(8, 2) },
+        { name: "Barbell Curl", sets: _ps(10, 2) },
+        { name: "Standing Calf Raise Machine", sets: _ps(15, 3) },
+      ]},
+    ],
+  },
+  {
+    id: "bro-split", name: "Bro Split", short: "Bro Split",
+    level: "Intermediate", goal: "Hypertrophy", frequency: "5 days/week",
+    description: "One muscle group per day, hit hard with lots of volume. Classic bodybuilding template — each muscle gets a full week to recover.",
+    workouts: [
+      { name: "Chest Day", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(8, 4) },
+        { name: "Incline Dumbbell Press", sets: _ps(10, 3) },
+        { name: "Cable Crossover", sets: _ps(12, 3) },
+        { name: "Chest Dips", sets: _ps(10, 3) },
+        { name: "Pec Deck / Butterfly Machine", sets: _ps(15, 3) },
+      ]},
+      { name: "Back Day", exercises: [
+        { name: "Conventional Deadlift", sets: _ps(5, 3) },
+        { name: "Pull-Up (Overhand)", sets: _ps(8, 3) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(8, 3) },
+        { name: "Lat Pulldown (Wide Grip)", sets: _ps(10, 3) },
+        { name: "Seated Cable Row (Close Grip)", sets: _ps(12, 3) },
+        { name: "Face Pull", sets: _ps(15, 3) },
+      ]},
+      { name: "Shoulder Day", exercises: [
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(6, 4) },
+        { name: "Arnold Press", sets: _ps(10, 3) },
+        { name: "Lateral Raise", sets: _ps(12, 4) },
+        { name: "Bent-Over Rear Delt Raise", sets: _ps(12, 3) },
+        { name: "Barbell Shrug", sets: _ps(12, 3) },
+      ]},
+      { name: "Leg Day", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(8, 4) },
+        { name: "Romanian Deadlift", sets: _ps(8, 3) },
+        { name: "Leg Press", sets: _ps(10, 3) },
+        { name: "Leg Extension", sets: _ps(12, 3) },
+        { name: "Lying Leg Curl", sets: _ps(12, 3) },
+        { name: "Standing Calf Raise Machine", sets: _ps(15, 4) },
+      ]},
+      { name: "Arm Day", exercises: [
+        { name: "Barbell Curl", sets: _ps(10, 4) },
+        { name: "Hammer Curl", sets: _ps(12, 3) },
+        { name: "Preacher Curl (EZ-Bar)", sets: _ps(10, 3) },
+        { name: "Cable Pushdown (Rope)", sets: _ps(12, 4) },
+        { name: "Overhead Cable Tricep Extension", sets: _ps(12, 3) },
+        { name: "Skull Crusher (EZ-Bar)", sets: _ps(10, 3) },
+      ]},
+    ],
+  },
+  {
+    id: "531-bbb", name: "5/3/1 Boring But Big", short: "5/3/1 BBB",
+    level: "Advanced", goal: "Strength", frequency: "4 days/week", author: "Jim Wendler",
+    description: "Four-day main-lift split with a high-volume supplemental (Boring But Big = 5×10 at 50–60% of training max). This is a static snapshot — real 5/3/1 runs a 4-week percentage cycle. Load this as a starting point, then track your main lift by the book.",
+    workouts: [
+      { name: "Squat Day", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(5, 3) },
+        { name: "Barbell Back Squat", sets: _ps(10, 5) },
+        { name: "Lying Leg Curl", sets: _ps(10, 5) },
+        { name: "Hanging Leg Raise", sets: _ps(10, 5) },
+      ]},
+      { name: "Bench Day", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(5, 3) },
+        { name: "Barbell Bench Press", sets: _ps(10, 5) },
+        { name: "Dumbbell Row (One-Arm)", sets: _ps(10, 5) },
+        { name: "Barbell Curl", sets: _ps(10, 5) },
+      ]},
+      { name: "Deadlift Day", exercises: [
+        { name: "Conventional Deadlift", sets: _ps(5, 3) },
+        { name: "Conventional Deadlift", sets: _ps(10, 5) },
+        { name: "Hanging Leg Raise", sets: _ps(10, 5) },
+        { name: "Back Extension (Roman Chair)", sets: _ps(10, 5) },
+      ]},
+      { name: "Press Day", exercises: [
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(5, 3) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(10, 5) },
+        { name: "Pull-Up (Overhand)", sets: _ps(10, 5) },
+        { name: "Dumbbell Curl (Alternating)", sets: _ps(10, 5) },
+      ]},
+    ],
+  },
+  {
+    id: "starting-strength", name: "Starting Strength", short: "SS",
+    level: "Beginner", goal: "Strength", frequency: "3 days/week", author: "Mark Rippetoe",
+    description: "The classic novice linear-progression program. Alternate Workout A and B, adding 5 lb each session on upper lifts, 10 lb on deadlift. This is the static workout shell — track the linear progression yourself.",
+    workouts: [
+      { name: "Workout A", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(5, 3) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(5, 3) },
+        { name: "Conventional Deadlift", sets: _ps(5, 1) },
+      ]},
+      { name: "Workout B", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(5, 3) },
+        { name: "Barbell Bench Press", sets: _ps(5, 3) },
+        { name: "Power Clean", sets: _ps(3, 5) },
+      ]},
+    ],
+  },
+  {
+    id: "stronglifts-5x5", name: "StrongLifts 5×5", short: "SL 5×5",
+    level: "Beginner", goal: "Strength", frequency: "3 days/week", author: "Mehdi",
+    description: "Beginner barbell program with 5 sets of 5. Alternate Workout A and B, add 5 lb every session on main lifts, 10 lb on deadlift. Load this as the shell; progress by feel.",
+    workouts: [
+      { name: "Workout A", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(5, 5) },
+        { name: "Barbell Bench Press", sets: _ps(5, 5) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(5, 5) },
+      ]},
+      { name: "Workout B", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(5, 5) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(5, 5) },
+        { name: "Conventional Deadlift", sets: _ps(5, 1) },
+      ]},
+    ],
+  },
+  {
+    id: "phul", name: "PHUL (Power Hypertrophy Upper Lower)", short: "PHUL",
+    level: "Intermediate", goal: "Strength + Hypertrophy", frequency: "4 days/week",
+    description: "Two power days (low reps, heavy) plus two hypertrophy days (higher reps, volume). Blends strength work with bodybuilding volume.",
+    workouts: [
+      { name: "Upper Power", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(4, 4) },
+        { name: "Incline Dumbbell Press", sets: _ps(8, 3) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(4, 4) },
+        { name: "Lat Pulldown (Wide Grip)", sets: _ps(8, 3) },
+        { name: "Barbell Curl", sets: _ps(6, 3) },
+        { name: "Skull Crusher (EZ-Bar)", sets: _ps(6, 3) },
+      ]},
+      { name: "Lower Power", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(4, 4) },
+        { name: "Conventional Deadlift", sets: _ps(4, 3) },
+        { name: "Leg Press", sets: _ps(8, 3) },
+        { name: "Lying Leg Curl", sets: _ps(8, 3) },
+        { name: "Standing Calf Raise Machine", sets: _ps(8, 4) },
+      ]},
+      { name: "Upper Hypertrophy", exercises: [
+        { name: "Incline Barbell Bench Press", sets: _ps(10, 4) },
+        { name: "Dumbbell Bench Press", sets: _ps(12, 3) },
+        { name: "Seated Cable Row (Close Grip)", sets: _ps(10, 4) },
+        { name: "Lat Pulldown (Close Grip)", sets: _ps(12, 3) },
+        { name: "Lateral Raise", sets: _ps(12, 4) },
+        { name: "Cable Curl (Rope)", sets: _ps(12, 3) },
+        { name: "Cable Pushdown (Rope)", sets: _ps(12, 3) },
+      ]},
+      { name: "Lower Hypertrophy", exercises: [
+        { name: "Barbell Front Squat", sets: _ps(10, 4) },
+        { name: "Barbell Romanian Deadlift", sets: _ps(10, 3) },
+        { name: "Leg Extension", sets: _ps(12, 4) },
+        { name: "Seated Leg Curl", sets: _ps(12, 4) },
+        { name: "Seated Calf Raise Machine", sets: _ps(15, 4) },
+      ]},
+    ],
+  },
+  {
+    id: "phat", name: "PHAT (Power Hypertrophy Adaptive Training)", short: "PHAT",
+    level: "Advanced", goal: "Strength + Hypertrophy", frequency: "5 days/week", author: "Layne Norton",
+    description: "Two power days (heavy compounds) plus three body-part hypertrophy days. High volume — designed for advanced lifters who've plateaued on pure hypertrophy or strength programs.",
+    workouts: [
+      { name: "Upper Power", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(4, 4) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(4, 4) },
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(5, 3) },
+        { name: "Lat Pulldown (Wide Grip)", sets: _ps(8, 3) },
+      ]},
+      { name: "Lower Power", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(4, 4) },
+        { name: "Conventional Deadlift", sets: _ps(4, 3) },
+        { name: "Leg Press", sets: _ps(8, 3) },
+        { name: "Lying Leg Curl", sets: _ps(8, 3) },
+      ]},
+      { name: "Back / Shoulders Hypertrophy", exercises: [
+        { name: "Pull-Up (Overhand)", sets: _ps(8, 4) },
+        { name: "Seated Cable Row (Close Grip)", sets: _ps(10, 4) },
+        { name: "Lat Pulldown (Close Grip)", sets: _ps(12, 3) },
+        { name: "Lateral Raise", sets: _ps(12, 4) },
+        { name: "Face Pull", sets: _ps(15, 4) },
+      ]},
+      { name: "Leg Hypertrophy", exercises: [
+        { name: "Barbell Front Squat", sets: _ps(10, 4) },
+        { name: "Barbell Romanian Deadlift", sets: _ps(10, 3) },
+        { name: "Leg Press", sets: _ps(12, 3) },
+        { name: "Leg Extension", sets: _ps(15, 3) },
+        { name: "Seated Leg Curl", sets: _ps(15, 3) },
+        { name: "Standing Calf Raise Machine", sets: _ps(15, 4) },
+      ]},
+      { name: "Chest / Arms Hypertrophy", exercises: [
+        { name: "Incline Barbell Bench Press", sets: _ps(10, 4) },
+        { name: "Dumbbell Bench Press", sets: _ps(12, 3) },
+        { name: "Cable Crossover", sets: _ps(15, 3) },
+        { name: "Barbell Curl", sets: _ps(12, 3) },
+        { name: "Cable Pushdown (Rope)", sets: _ps(12, 3) },
+        { name: "Skull Crusher (EZ-Bar)", sets: _ps(12, 3) },
+      ]},
+    ],
+  },
+  {
+    id: "arnold-split", name: "Arnold Split", short: "Arnold",
+    level: "Advanced", goal: "Hypertrophy", frequency: "6 days/week", author: "Arnold Schwarzenegger",
+    description: "The original golden-era split: Chest/Back, Shoulders/Arms, and Legs — each hit TWICE per week (Mon+Thu, Tue+Fri, Wed+Sat). Massive volume. Fork the three templates and run them back-to-back-to-back.",
+    workouts: [
+      { name: "Chest + Back", exercises: [
+        { name: "Barbell Bench Press", sets: _ps(8, 4) },
+        { name: "Incline Barbell Bench Press", sets: _ps(10, 3) },
+        { name: "Dumbbell Flye", sets: _ps(12, 3) },
+        { name: "Pull-Up (Overhand)", sets: _ps(8, 4) },
+        { name: "Barbell Row (Bent-Over)", sets: _ps(8, 3) },
+        { name: "Dumbbell Pullover", sets: _ps(12, 3) },
+      ]},
+      { name: "Shoulders + Arms", exercises: [
+        { name: "Barbell Overhead Press (Standing)", sets: _ps(8, 4) },
+        { name: "Lateral Raise", sets: _ps(12, 4) },
+        { name: "Front Raise", sets: _ps(12, 3) },
+        { name: "Barbell Curl", sets: _ps(10, 4) },
+        { name: "Preacher Curl (EZ-Bar)", sets: _ps(10, 3) },
+        { name: "Cable Pushdown (Rope)", sets: _ps(12, 4) },
+        { name: "Skull Crusher (EZ-Bar)", sets: _ps(10, 3) },
+      ]},
+      { name: "Legs", exercises: [
+        { name: "Barbell Back Squat", sets: _ps(8, 5) },
+        { name: "Barbell Front Squat", sets: _ps(10, 3) },
+        { name: "Leg Press", sets: _ps(12, 3) },
+        { name: "Lying Leg Curl", sets: _ps(12, 4) },
+        { name: "Standing Calf Raise Machine", sets: _ps(15, 5) },
+        { name: "Hanging Leg Raise", sets: _ps(15, 3) },
+      ]},
+    ],
+  },
 ];
 
 // Exercise picker filter constants
@@ -3120,6 +3420,90 @@ function ToolsMenu({ onClose, on1RM, onPlates }) {
 }
 
 // ── Notifications Modal ───────────────────────────────────────────────
+// ── Fix #12: Program Browser (Browse Starter Programs) ───────────────
+function ProgramBrowser({ onClose, onFork, onStart }) {
+  const t = useT();
+  const [selectedId, setSelectedId] = useState(null);
+  const program = selectedId ? STARTER_PROGRAMS.find(p => p.id === selectedId) : null;
+  const levelColor = (lvl) => lvl === "Beginner" ? "#5bb85b" : lvl === "Intermediate" ? "#ff9500" : "#d55b5b";
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "88dvh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${t.border}`, marginBottom: 16, gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+            {program && (
+              <button onClick={() => setSelectedId(null)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted, flexShrink: 0 }}>
+                <Icon name="chevronRight" size={14} color={t.textMuted} />
+              </button>
+            )}
+            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {program ? program.short : <>Browse <span style={{ color: accent }}>Programs</span></>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted, flexShrink: 0 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        {!program && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {STARTER_PROGRAMS.map(p => (
+              <button key={p.id} onClick={() => setSelectedId(p.id)} style={{ textAlign: "left", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", color: t.text, width: "100%", boxSizing: "border-box" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: t.text, flex: 1, minWidth: 0 }}>{p.name}</div>
+                  <Icon name="chevronRight" size={14} color={t.textMuted} />
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                  <span style={{ background: `${levelColor(p.level)}20`, color: levelColor(p.level), borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{p.level}</span>
+                  <span style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600 }}>{p.goal}</span>
+                  <span style={{ color: t.textMuted, fontSize: 11, fontWeight: 500, padding: "2px 4px" }}>{p.frequency}</span>
+                </div>
+                <div style={{ color: t.textSub, fontSize: 12, lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{p.description}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {program && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                <span style={{ background: `${levelColor(program.level)}20`, color: levelColor(program.level), borderRadius: 6, padding: "3px 10px", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{program.level}</span>
+                <span style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 6, padding: "3px 10px", fontSize: 10, fontWeight: 600 }}>{program.goal}</span>
+                <span style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 6, padding: "3px 10px", fontSize: 10, fontWeight: 600 }}>{program.frequency}</span>
+                {program.author && <span style={{ background: "transparent", color: t.textMuted, fontSize: 10, padding: "3px 2px", fontStyle: "italic" }}>by {program.author}</span>}
+              </div>
+              <div style={{ color: t.textSub, fontSize: 13, lineHeight: 1.6 }}>{program.description}</div>
+            </div>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Workouts ({program.workouts.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {program.workouts.map((w, wi) => (
+                <div key={wi} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "12px 14px" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 4 }}>{w.name}</div>
+                  <div style={{ color: t.textMuted, fontSize: 11, marginBottom: 10, lineHeight: 1.5 }}>{w.exercises.map(e => e.name).join(" · ")}</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { onFork(program, w); }} style={{ flex: 1, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 10, padding: "10px 0", fontSize: 12, fontWeight: 700, color: t.textSub, cursor: "pointer", letterSpacing: 0.3, minHeight: 44, touchAction: "manipulation" }}>
+                      Save to Templates
+                    </button>
+                    <button onClick={() => { onStart(program, w); }} style={{ flex: 1, background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, border: "none", borderRadius: 10, padding: "10px 0", fontFamily: "'Bebas Neue', cursive", fontSize: 14, letterSpacing: 1, color: "#fff", cursor: "pointer", minHeight: 44, touchAction: "manipulation" }}>
+                      START NOW
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NotificationsModal({ notifications, onClose, onMarkAllRead, onClearAll, onToggleRead }) {
   const t = useT();
   const list = notifications || [];
@@ -3207,6 +3591,7 @@ export default function App() {
   const [show1RM, setShow1RM] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showTools, setShowTools] = useState(false);
+  const [showProgramBrowser, setShowProgramBrowser] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -3516,6 +3901,10 @@ export default function App() {
                   <Icon name="history" size={14} /> Repeat Last Session
                 </button>
               )}
+              {/* Browse starter programs */}
+              <button onClick={() => setShowProgramBrowser(true)} style={{ width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, color: t.textSub, padding: "13px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10, touchAction: "manipulation", letterSpacing: 0.3 }}>
+                <Icon name="book" size={14} /> Browse Starter Programs
+              </button>
               {/* Templates — newest 3 inline, rest behind "View all" */}
               {templates.length > 0 && (
                 <div>
@@ -4049,6 +4438,27 @@ export default function App() {
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} />}
+      {showProgramBrowser && <ProgramBrowser
+        onClose={() => setShowProgramBrowser(false)}
+        onFork={(program, w) => {
+          const baseName = `${program.short} — ${w.name}`;
+          const taken = new Set(templates.map(t => t.name));
+          let finalName = baseName;
+          if (taken.has(finalName)) {
+            for (let i = 0; i < 26; i++) { const c = `${baseName} ${String.fromCharCode(65 + i)}`; if (!taken.has(c)) { finalName = c; break; } }
+          }
+          const tmpl = { id: Date.now().toString(), name: finalName, exercises: w.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
+          save({ ...data, templates: [...templates, tmpl] });
+          haptic([0, 50, 30, 80]);
+          setShowProgramBrowser(false);
+        }}
+        onStart={(program, w) => {
+          setWorkout({ date: todayISO(), startTime: Date.now(), exercises: w.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) });
+          setShowProgramBrowser(false);
+          setView("log");
+          haptic([0, 40]);
+        }}
+      />}
 
       {/* ── SIGN OUT — fixed above nav on profile tab ── */}
       {view === "profile" && (
