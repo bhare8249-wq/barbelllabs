@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.12";
+const APP_VERSION = "2.4.13";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -2017,7 +2017,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts }) {
       <textarea
         value={exercise.note || ""}
         onChange={e => onChange({ ...exercise, note: e.target.value })}
-        placeholder="Notes (e.g. felt tight, increase next time…)"
+        placeholder="Notes (how it felt, reminders…)"
         rows={1}
         style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "12px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }}
         onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
