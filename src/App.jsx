@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.14";
+const APP_VERSION = "2.4.15";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -706,16 +706,17 @@ const STARTER_PROGRAMS = [
 ];
 
 // Exercise picker filter constants
+// Fix #16: Steel-Blue-harmonized category palette — more saturated, distinct, on-brand
 const EX_CATS = [
   { id: "all",       label: "All" },
-  { id: "chest",     label: "Chest",     color: "#ff6b6b" },
-  { id: "back",      label: "Back",      color: "#4ecdc4" },
-  { id: "shoulders", label: "Shoulders", color: "#ffe66d" },
-  { id: "arms",      label: "Arms",      color: "#a8e6cf" },
-  { id: "legs",      label: "Legs",      color: "#c3a6ff" },
-  { id: "core",      label: "Core",      color: "#ff8b94" },
-  { id: "cardio",    label: "Cardio",    color: "#ffd93d" },
-  { id: "full",      label: "Full Body", color: "#6bcb77" },
+  { id: "chest",     label: "Chest",     color: "#E67E6B" },
+  { id: "back",      label: "Back",      color: "#4A9EB8" },
+  { id: "shoulders", label: "Shoulders", color: "#D4A64E" },
+  { id: "arms",      label: "Arms",      color: "#7FB069" },
+  { id: "legs",      label: "Legs",      color: "#9E7ABF" },
+  { id: "core",      label: "Core",      color: "#D96B7A" },
+  { id: "cardio",    label: "Cardio",    color: "#E8B64C" },
+  { id: "full",      label: "Full Body", color: "#5BB588" },
 ];
 const EX_EQUIPS = [
   { id: "all",        label: "All Equip" },
@@ -726,7 +727,7 @@ const EX_EQUIPS = [
   { id: "bodyweight", label: "Bodyweight" },
   { id: "other",      label: "Other" },
 ];
-const CAT_COLORS = { chest:"#ff6b6b", back:"#4ecdc4", shoulders:"#ffe66d", arms:"#a8e6cf", legs:"#c3a6ff", core:"#ff8b94", cardio:"#ffd93d", full:"#6bcb77", custom:"#888" };
+const CAT_COLORS = { chest:"#E67E6B", back:"#4A9EB8", shoulders:"#D4A64E", arms:"#7FB069", legs:"#9E7ABF", core:"#D96B7A", cardio:"#E8B64C", full:"#5BB588", custom:"#888" };
 const WORKOUT_LABELS = [
   { id: "legs",      label: "Legs",       emoji: "🦵", color: "#5bb85b", bg: "rgba(91,184,91,0.12)",  border: "rgba(91,184,91,0.3)" },
   { id: "push",      label: "Push",       emoji: "💪", color: "#5b9bd5", bg: "rgba(91,155,213,0.12)", border: "rgba(91,155,213,0.3)" },
@@ -3974,11 +3975,12 @@ export default function App() {
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
               {/* Category filter chips (Fix #15: reordered by usage, snap-aligned, fade into surfaceHigh) */}
+              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 2 }}>Muscle Group</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedCats.map(c => {
                     const active = exCatFilter === c.id;
-                    const darkText = active && c.color && ["#ffe66d","#a8e6cf","#c3a6ff","#ffd93d"].includes(c.color);
+                    const darkText = active && c.color && ["#D4A64E", "#E8B64C"].includes(c.color);
                     return (
                       <button key={c.id} onClick={() => setExCatFilter(c.id)} style={{ flexShrink: 0, padding: "10px 16px", borderRadius: 22, border: `1.5px solid ${active ? (c.color || accent) : t.border}`, background: active ? (c.color || accent) : t.surface, color: active ? (darkText ? "#111" : "#fff") : t.textSub, fontSize: 14, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none", scrollSnapAlign: "start" }}>{c.label}</button>
                     );
@@ -3987,6 +3989,7 @@ export default function App() {
                 <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, ${t.surfaceHigh}00, ${t.surfaceHigh})`, pointerEvents: "none" }} />
               </div>
               {/* Equipment filter chips */}
+              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 4 }}>Equipment</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedEquips.map(eq => {
