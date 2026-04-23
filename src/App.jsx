@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.11";
+const APP_VERSION = "2.4.12";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -1856,27 +1856,29 @@ function SetRow({ set, index, onChange, onRemove }) {
 
   return (
     <div style={{ marginBottom: 8 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span style={{ width: 22, color: t.textMuted, fontSize: 13, textAlign: "center", flexShrink: 0 }}>{index + 1}</span>
-        <input type="number" inputMode="decimal" placeholder="lbs" value={set.weight} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 88 })} />
-        <span style={{ color: t.textMuted, fontSize: 13 }}>×</span>
-        <input type="number" inputMode="numeric" placeholder="reps" value={set.reps} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 80 })} />
-        {/* RPE chip */}
-        <button
-          onClick={() => { setShowRpe(v => !v); haptic(8); }}
-          style={{
-            background: hasRpe ? `${toneColor}18` : "transparent",
-            border: `1px solid ${hasRpe ? toneColor + "66" : t.border}`,
-            borderRadius: 8, padding: "10px 12px", fontSize: 12, fontWeight: 700,
-            color: hasRpe ? toneColor : t.textMuted, cursor: "pointer",
-            whiteSpace: "nowrap", flexShrink: 0, minHeight: 44, touchAction: "manipulation",
-            transition: "all 0.15s",
-          }}
-        >
-          {hasRpe ? `@${rpe % 1 === 0 ? rpe : rpe.toFixed(1)}` : "RPE"}
-        </button>
-        <button onClick={onRemove} style={S.iconBtn("#ff5b5b")}><Icon name="x" size={14} /></button>
-      </div>
+      <SwipeableRow flat onDelete={onRemove} bgColor={t.surfaceHigh}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ width: 18, color: t.textMuted, fontSize: 13, textAlign: "center", flexShrink: 0 }}>{index + 1}</span>
+          <input type="number" inputMode="decimal" placeholder="lbs" value={set.weight} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
+          <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
+          <input type="number" inputMode="numeric" placeholder="reps" value={set.reps} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
+          {/* RPE chip */}
+          <button
+            onClick={() => { setShowRpe(v => !v); haptic(8); }}
+            style={{
+              background: hasRpe ? `${toneColor}18` : "transparent",
+              border: `1px solid ${hasRpe ? toneColor + "66" : t.border}`,
+              borderRadius: 8, padding: "10px 10px", fontSize: 12, fontWeight: 700,
+              color: hasRpe ? toneColor : t.textMuted, cursor: "pointer",
+              whiteSpace: "nowrap", flexShrink: 0, minHeight: 44, touchAction: "manipulation",
+              transition: "all 0.15s",
+            }}
+          >
+            {hasRpe ? `@${rpe % 1 === 0 ? rpe : rpe.toFixed(1)}` : "RPE"}
+          </button>
+          <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 32, height: 36, minWidth: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, marginLeft: "auto", touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
+        </div>
+      </SwipeableRow>
 
       {/* Expanded RPE/RIR panel */}
       {showRpe && (
@@ -2904,8 +2906,8 @@ function SaveTemplateSheet({ exercises, existingTemplates, onSave, onClose }) {
   );
 }
 
-// ── Fix #10: Swipeable row (swipe-left reveals Delete action) ─────────
-function SwipeableRow({ children, onDelete, bgColor, borderColor }) {
+// ── Fix #10/#13: Swipeable row (swipe-left reveals Delete action) ─────
+function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
   const REVEAL = 90;
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -2958,10 +2960,10 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor }) {
   };
 
   return (
-    <div style={{ position: "relative", overflow: "hidden", borderRadius: 14, marginBottom: 10, border: `1px solid ${borderColor}` }}>
+    <div style={{ position: "relative", overflow: "hidden", borderRadius: flat ? 10 : 14, marginBottom: flat ? 0 : 10, border: flat ? "none" : `1px solid ${borderColor}` }}>
       <button onClick={handleDelete} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: REVEAL, background: "#d55b5b", border: "none", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, touchAction: "manipulation", letterSpacing: 0.3 }}>
-        <Icon name="trash" size={18} />
-        Delete
+        <Icon name="trash" size={flat ? 14 : 18} />
+        {!flat && "Delete"}
       </button>
       <div
         onTouchStart={onTouchStart}
@@ -2973,7 +2975,7 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor }) {
           transition: dragging ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
           willChange: "transform",
           background: bgColor,
-          padding: "14px 16px",
+          padding: flat ? 0 : "14px 16px",
           position: "relative",
           zIndex: 1,
         }}
