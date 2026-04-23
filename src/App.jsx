@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.17";
+const APP_VERSION = "2.4.18";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -3819,6 +3819,9 @@ export default function App() {
   const [showTools, setShowTools] = useState(false);
   const [showProgramBrowser, setShowProgramBrowser] = useState(false);
   const [showManageTags, setShowManageTags] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyRange, setHistoryRange] = useState(null); // { from: "YYYY-MM-DD", to: "YYYY-MM-DD" }
+  const [showRangePicker, setShowRangePicker] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -4292,17 +4295,32 @@ export default function App() {
 
       {/* ── HISTORY ──────────────────────── */}
       {view === "history" && (() => {
-        const historyGroups = groupWorkoutsByPeriod(data.workouts);
+        // Fix #22: filter by search + custom date range BEFORE grouping
+        const searchLower = historySearch.trim().toLowerCase();
+        const rangeFrom = historyRange?.from ? new Date(historyRange.from) : null;
+        const rangeTo = historyRange?.to ? new Date(historyRange.to + "T23:59:59") : null;
+        const filteredWorkouts = data.workouts.filter(w => {
+          if (searchLower && !w.exercises.some(e => e.name.toLowerCase().includes(searchLower))) return false;
+          if (rangeFrom || rangeTo) {
+            const d = new Date(w.date);
+            if (rangeFrom && d < rangeFrom) return false;
+            if (rangeTo && d > rangeTo) return false;
+          }
+          return true;
+        });
+        const historyGroups = groupWorkoutsByPeriod(filteredWorkouts);
         const recencyOpts = [
           { value: "7",  label: "Last 7 days"  },
           { value: "14", label: "Last 14 days" },
           { value: "21", label: "Last 21 days" },
           { value: "30", label: "Last 30 days" },
+          { value: "90", label: "Last 90 days" },
         ];
         const handleJump = (e) => {
           const v = e.target.value;
           e.target.value = "";
           if (!v) return;
+          if (v === "custom") { setShowRangePicker(true); return; }
           if (v.startsWith("sec:")) {
             const el = document.getElementById(v.slice(4));
             if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4311,10 +4329,11 @@ export default function App() {
           const days = parseInt(v);
           if (days) {
             const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
-            const idx = data.workouts.findIndex(w => new Date(w.date) >= cutoff);
+            const idx = filteredWorkouts.findIndex(w => new Date(w.date) >= cutoff);
             if (idx !== -1) { const el = document.getElementById(`hcard-${idx}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
           }
         };
+        const hasFilter = !!searchLower || !!historyRange;
         return (
         <div style={{ padding: "52px 20px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
           <div style={{ marginBottom: 16 }}>
@@ -4323,21 +4342,64 @@ export default function App() {
               <HelpBtn page="history" onOpen={() => setHelpPage("history")} />
             </div>
             {data.workouts.length > 0 && (
-              <div style={{ position: "relative", display: "inline-block" }}>
-                <select defaultValue="" onChange={handleJump} style={sel({ fontSize: 11 })}>
-                  <option value="" disabled>Jump to…</option>
-                  <optgroup label="Sections">
-                    {historyGroups.map(g => (
-                      <option key={g.id} value={`sec:${g.id}`} style={{ background: t.surfaceHigh, color: t.text }}>{g.label} ({g.items.length})</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Recency">
-                    {recencyOpts.map(o => (
-                      <option key={o.value} value={o.value} style={{ background: t.surfaceHigh, color: t.text }}>{o.label}</option>
-                    ))}
-                  </optgroup>
-                </select>
-                <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: accent, display: "flex" }}><Icon name="chevronDown" size={12} /></span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                {/* Search by exercise */}
+                <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
+                  <input value={historySearch} onChange={e => setHistorySearch(e.target.value)} placeholder="Search by exercise…" style={{ width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 10, color: t.text, padding: "9px 32px 9px 30px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: t.textMuted, pointerEvents: "none" }}>🔍</span>
+                  {historySearch && (
+                    <button onClick={() => setHistorySearch("")} style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Icon name="x" size={14} />
+                    </button>
+                  )}
+                </div>
+                {/* Jump-to picker */}
+                <div style={{ position: "relative" }}>
+                  <select defaultValue="" onChange={handleJump} style={sel({ fontSize: 11 })}>
+                    <option value="" disabled>Jump to…</option>
+                    <optgroup label="Sections">
+                      {historyGroups.map(g => (
+                        <option key={g.id} value={`sec:${g.id}`} style={{ background: t.surfaceHigh, color: t.text }}>{g.label} ({g.items.length})</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Recency">
+                      {recencyOpts.map(o => (
+                        <option key={o.value} value={o.value} style={{ background: t.surfaceHigh, color: t.text }}>{o.label}</option>
+                      ))}
+                      <option value="custom" style={{ background: t.surfaceHigh, color: t.text }}>Custom range…</option>
+                    </optgroup>
+                  </select>
+                  <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: accent, display: "flex" }}><Icon name="chevronDown" size={12} /></span>
+                </div>
+              </div>
+            )}
+            {/* Custom range picker */}
+            {showRangePicker && (
+              <div style={{ marginTop: 10, padding: "12px 14px", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12 }}>
+                <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 8 }}>Custom date range</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <input type="date" value={historyRange?.from || ""} onChange={e => setHistoryRange(r => ({ ...(r || {}), from: e.target.value }))} style={{ flex: 1, minWidth: 130, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                  <span style={{ color: t.textMuted, fontSize: 12 }}>to</span>
+                  <input type="date" value={historyRange?.to || ""} onChange={e => setHistoryRange(r => ({ ...(r || {}), to: e.target.value }))} style={{ flex: 1, minWidth: 130, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 8, color: t.text, padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => { setHistoryRange(null); setShowRangePicker(false); }} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Clear</button>
+                  <button onClick={() => setShowRangePicker(false)} style={{ flex: 1, background: accent, border: "none", color: "#fff", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Apply</button>
+                </div>
+              </div>
+            )}
+            {/* Active-filter banner */}
+            {hasFilter && (
+              <div style={{ marginTop: 10, padding: "8px 12px", background: `${accent}10`, border: `1px solid ${accent}40`, borderRadius: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: accent, fontWeight: 700 }}>
+                  {filteredWorkouts.length} match{filteredWorkouts.length !== 1 ? "es" : ""}
+                </span>
+                <span style={{ fontSize: 11, color: t.textSub, flex: 1, minWidth: 0 }}>
+                  {searchLower && <>"{historySearch}"</>}
+                  {searchLower && historyRange && " · "}
+                  {historyRange && <>{historyRange.from || "…"} to {historyRange.to || "…"}</>}
+                </span>
+                <button onClick={() => { setHistorySearch(""); setHistoryRange(null); setShowRangePicker(false); }} style={{ background: "transparent", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "2px 4px" }}>Clear all</button>
               </div>
             )}
           </div>
@@ -4351,6 +4413,13 @@ export default function App() {
               <button onClick={() => setView("log")} style={{ background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#fff", border: "none", borderRadius: 12, padding: "13px 28px", fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1, cursor: "pointer" }}>
                 START YOUR FIRST WORKOUT
               </button>
+            </div>
+          )}
+          {data.workouts.length > 0 && filteredWorkouts.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px 24px", color: t.textMuted }}>
+              <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>🔍</div>
+              <div style={{ fontSize: 14, lineHeight: 1.6 }}>No workouts match your filters.</div>
+              <button onClick={() => { setHistorySearch(""); setHistoryRange(null); setShowRangePicker(false); }} style={{ marginTop: 14, background: "transparent", border: `1px solid ${t.border}`, color: accent, borderRadius: 10, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Clear all</button>
             </div>
           )}
           {historyGroups.map(group => (
