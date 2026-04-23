@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.19";
+const APP_VERSION = "2.4.20";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -2427,7 +2427,7 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile, onManageTags }) {
+function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile, onManageTags, onExport }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2491,10 +2491,23 @@ function SettingsModal({ authedUser, onClose, toggleTheme, onEditProfile, onMana
         {/* Email verification */}
         <VerifyEmailRow />
         {/* Security */}
-        <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Account Security</div>
           <SecuritySettings />
         </div>
+        {/* Data & Privacy */}
+        {onExport && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Data &amp; Privacy</div>
+            <button onClick={onExport} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                <Icon name="download" size={16} />
+                Export Workouts (CSV)
+              </span>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3446,6 +3459,46 @@ function computeMissedWorkoutNudge(data) {
 }
 
 // ── Tools Menu (Log screen overflow: 1RM, Plates, etc.) ──────────────
+// Fix #24: History overflow menu (Export workouts, future: Delete all, etc.)
+function HistoryMenu({ onClose, onExport }) {
+  const t = useT();
+  const items = [
+    { icon: "download", label: "Export Workouts (CSV)", sub: "Download your full workout history as a spreadsheet", onClick: onExport },
+  ];
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "70dvh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${t.border}`, marginBottom: 12 }}>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1 }}>
+            History <span style={{ color: accent }}>Menu</span>
+          </div>
+          <button onClick={onClose} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map(item => (
+            <button key={item.label} onClick={() => { item.onClick(); onClose(); }} style={{ display: "flex", gap: 14, alignItems: "center", textAlign: "left", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, width: "100%", boxSizing: "border-box" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${accent}18`, border: `1px solid ${accent}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: accent }}>
+                <Icon name={item.icon} size={16} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{item.label}</div>
+                <div style={{ color: t.textSub, fontSize: 12, lineHeight: 1.4 }}>{item.sub}</div>
+              </div>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ToolsMenu({ onClose, on1RM, onPlates }) {
   const t = useT();
   const items = [
@@ -3822,6 +3875,7 @@ export default function App() {
   const [historySearch, setHistorySearch] = useState("");
   const [historyRange, setHistoryRange] = useState(null); // { from: "YYYY-MM-DD", to: "YYYY-MM-DD" }
   const [showRangePicker, setShowRangePicker] = useState(false);
+  const [showHistoryMenu, setShowHistoryMenu] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -4335,11 +4389,14 @@ export default function App() {
         };
         const hasFilter = !!searchLower || !!historyRange;
         return (
-        <div style={{ padding: "52px 20px 20px", paddingBottom: data.workouts.length > 0 ? "100px" : "24px" }}>
+        <div style={{ padding: "52px 20px 20px", paddingBottom: "24px" }}>
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>WORKOUT <span style={{ color: accent }}>HISTORY</span></div>
-              <HelpBtn page="history" onOpen={() => setHelpPage("history")} />
+              <TopActions>
+                {data.workouts.length > 0 && <IconBtn icon="moreH" onClick={() => setShowHistoryMenu(true)} label="History menu" />}
+                <HelpBtn page="history" onOpen={() => setHelpPage("history")} />
+              </TopActions>
             </div>
             {data.workouts.length > 0 && (
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -4448,38 +4505,6 @@ export default function App() {
             </div>
           ))}
 
-          {/* Export — fixed above nav bar */}
-          {data.workouts.length > 0 && (
-            <div style={{
-              position: "fixed", bottom: "calc(62px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
-              width: "100%", maxWidth: 420, display: "flex", justifyContent: "center",
-              padding: "10px 20px", boxSizing: "border-box",
-              background: `linear-gradient(to top, ${t.bg} 60%, transparent)`,
-              pointerEvents: "none",
-            }}>
-              <button
-                onClick={exportCSV}
-                style={{
-                  pointerEvents: "all",
-                  background: t.surfaceHigh,
-                  border: `1px solid ${t.border}`,
-                  color: t.textSub,
-                  borderRadius: 20,
-                  padding: "11px 28px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  letterSpacing: 0.3,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                }}
-              >
-                <Icon name="download" size={15} /> Export Workouts
-              </button>
-            </div>
-          )}
         </div>
         );
       })()}
@@ -4766,10 +4791,11 @@ export default function App() {
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} onManageTags={() => { setShowSettings(false); setShowManageTags(true); }} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} onManageTags={() => { setShowSettings(false); setShowManageTags(true); }} onExport={() => { setShowSettings(false); exportCSV(); }} />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} />}
       {showManageTags && <ManageTagsModal customTags={data.customTags} onClose={() => setShowManageTags(false)} onChange={(next) => save({ ...data, customTags: next })} />}
+      {showHistoryMenu && <HistoryMenu onClose={() => setShowHistoryMenu(false)} onExport={() => exportCSV()} />}
       {showProgramBrowser && <ProgramBrowser
         onClose={() => setShowProgramBrowser(false)}
         onFork={(program, w) => {
