@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.8";
+const APP_VERSION = "2.4.9";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -2576,6 +2576,86 @@ function SaveTemplateSheet({ exercises, existingTemplates, onSave, onClose }) {
   );
 }
 
+// ── Fix #10: Swipeable row (swipe-left reveals Delete action) ─────────
+function SwipeableRow({ children, onDelete, bgColor, borderColor }) {
+  const REVEAL = 90;
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(null);
+  const startY = useRef(null);
+  const startOffset = useRef(0);
+  const horizontalLocked = useRef(false);
+
+  const onTouchStart = (e) => {
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    startOffset.current = offset;
+    horizontalLocked.current = false;
+    setDragging(true);
+  };
+  const onTouchMove = (e) => {
+    if (startX.current === null) return;
+    const dx = e.touches[0].clientX - startX.current;
+    const dy = e.touches[0].clientY - startY.current;
+    if (!horizontalLocked.current) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) { startX.current = null; return; }
+      horizontalLocked.current = true;
+    }
+    e.stopPropagation();
+    let next = startOffset.current + dx;
+    if (next > 0) next = 0;
+    if (next < -REVEAL) next = -REVEAL + (next + REVEAL) * 0.25;
+    setOffset(next);
+  };
+  const onTouchEnd = () => {
+    if (offset < -40) setOffset(-REVEAL);
+    else setOffset(0);
+    startX.current = null;
+    startY.current = null;
+    horizontalLocked.current = false;
+    setDragging(false);
+  };
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    haptic([0, 40, 30, 80]);
+    onDelete();
+  };
+  const handleRowClick = (e) => {
+    if (offset !== 0 && !e.target.closest("button")) {
+      e.stopPropagation();
+      setOffset(0);
+    }
+  };
+
+  return (
+    <div style={{ position: "relative", overflow: "hidden", borderRadius: 14, marginBottom: 10, border: `1px solid ${borderColor}` }}>
+      <button onClick={handleDelete} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: REVEAL, background: "#d55b5b", border: "none", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, touchAction: "manipulation", letterSpacing: 0.3 }}>
+        <Icon name="trash" size={18} />
+        Delete
+      </button>
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={handleRowClick}
+        style={{
+          transform: `translateX(${offset}px)`,
+          transition: dragging ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
+          willChange: "transform",
+          background: bgColor,
+          padding: "14px 16px",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function TemplateManager({ templates, onLoad, onDelete, onRename, onClose }) {
   const t = useT(); const S = useS();
   const [renamingId, setRenamingId] = useState(null);
@@ -2593,7 +2673,7 @@ function TemplateManager({ templates, onLoad, onDelete, onRename, onClose }) {
           </div>
         )}
         {templates.map(tmpl => (
-          <div key={tmpl.id} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+          <SwipeableRow key={tmpl.id} onDelete={() => onDelete(tmpl.id)} bgColor={t.surfaceHigh} borderColor={t.border}>
             {renamingId === tmpl.id ? (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input value={renameVal} onChange={e => setRenameVal(e.target.value)} autoFocus maxLength={40}
@@ -2617,7 +2697,7 @@ function TemplateManager({ templates, onLoad, onDelete, onRename, onClose }) {
                 </button>
               </>
             )}
-          </div>
+          </SwipeableRow>
         ))}
         <button onClick={onClose} style={{ ...S.solidBtn({ marginTop: 8, width: "100%", padding: 14, fontSize: 16 }) }}>Done</button>
       </div>
