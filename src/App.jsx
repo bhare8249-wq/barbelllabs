@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.7";
+const APP_VERSION = "2.4.8";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -3408,7 +3408,7 @@ export default function App() {
                   <Icon name="history" size={14} /> Repeat Last Session
                 </button>
               )}
-              {/* Templates */}
+              {/* Templates — newest 3 inline, rest behind "View all" */}
               {templates.length > 0 && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -3416,12 +3416,17 @@ export default function App() {
                     <button onClick={() => setShowTemplateManager(true)} style={{ background: "transparent", border: "none", color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "2px 0" }}>Manage</button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {templates.map(tmpl => (
+                    {[...templates].reverse().slice(0, 3).map(tmpl => (
                       <button key={tmpl.id} onClick={() => loadTemplate(tmpl)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "12px 16px", textAlign: "left", cursor: "pointer", width: "100%", touchAction: "manipulation" }}>
                         <div style={{ fontWeight: 700, fontSize: 14, color: t.text, marginBottom: 3 }}>{tmpl.name}</div>
                         <div style={{ fontSize: 12, color: t.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tmpl.exercises.map(e => e.name).join(" · ")}</div>
                       </button>
                     ))}
+                    {templates.length > 3 && (
+                      <button onClick={() => setShowTemplateManager(true)} style={{ background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 12, color: t.textSub, padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" }}>
+                        View all {templates.length} templates
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -3493,9 +3498,30 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
-              <Icon name="plus" size={15} /> Add Exercise
-            </button>
+            <>
+              {(() => {
+                const freq = {};
+                (data.workouts || []).slice(0, 10).forEach(w => w.exercises.forEach(ex => { freq[ex.name] = (freq[ex.name] || 0) + 1; }));
+                const already = new Set((workout?.exercises || []).map(e => e.name));
+                const recent = Object.entries(freq).filter(([n]) => !already.has(n)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
+                if (recent.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 6 }}>Recent</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {recent.map(name => (
+                        <button key={name} onClick={() => addExercise(name)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "8px 13px", fontSize: 12, color: t.textSub, cursor: "pointer", touchAction: "manipulation", fontWeight: 600, whiteSpace: "nowrap", minHeight: 36 }}>
+                          + {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
+                <Icon name="plus" size={15} /> Add Exercise
+              </button>
+            </>
           )}
           {workout && workout.exercises.length > 0 && <button onClick={finishWorkout} style={{ ...S.solidBtn(), width: "100%", padding: 14, borderRadius: 12, fontSize: 18, marginTop: 4 }}>Finish Workout</button>}
           {(!workout || workout.exercises.length === 0) && !showExPicker && (
