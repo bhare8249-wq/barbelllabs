@@ -146,7 +146,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.5";
+const APP_VERSION = "2.4.6";
 const BUILD_DATE  = "2026-04-22";
 
 function useStorage(uid) {
@@ -562,6 +562,7 @@ const Icon = ({ name, size = 18, color }) => {
     chevronRight: <polyline points="9 18 15 12 9 6"/>,
     help:         <><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
     bell:         <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></>,
+    moreH:        <><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{p[name]}</svg>;
 };
@@ -2927,6 +2928,47 @@ function computeMissedWorkoutNudge(data) {
   };
 }
 
+// ── Tools Menu (Log screen overflow: 1RM, Plates, etc.) ──────────────
+function ToolsMenu({ onClose, on1RM, onPlates }) {
+  const t = useT();
+  const items = [
+    { icon: "zap",      label: "1RM Calculator",   sub: "Estimate your 1-rep max from any weight × reps",      onClick: on1RM },
+    { icon: "dumbbell", label: "Plate Calculator", sub: "Pick a target weight, see the plates you need", onClick: onPlates },
+  ];
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "70dvh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${t.border}`, marginBottom: 12 }}>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1 }}>
+            <span style={{ color: accent }}>Tools</span>
+          </div>
+          <button onClick={onClose} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map(item => (
+            <button key={item.label} onClick={() => { item.onClick(); onClose(); }} style={{ display: "flex", gap: 14, alignItems: "center", textAlign: "left", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, width: "100%", boxSizing: "border-box" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${accent}18`, border: `1px solid ${accent}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: accent }}>
+                <Icon name={item.icon} size={16} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{item.label}</div>
+                <div style={{ color: t.textSub, fontSize: 12, lineHeight: 1.4 }}>{item.sub}</div>
+              </div>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Notifications Modal ───────────────────────────────────────────────
 function NotificationsModal({ notifications, onClose, onMarkAllRead, onClearAll, onToggleRead }) {
   const t = useT();
@@ -3014,6 +3056,7 @@ export default function App() {
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [show1RM, setShow1RM] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showTools, setShowTools] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
   const profile = data.profile || {};
@@ -3297,17 +3340,16 @@ export default function App() {
       {/* ── LOG ──────────────────────────── */}
       {view === "log" && (
         <div style={{ padding: "52px 20px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-            <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 12 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1.5, lineHeight: 1 }}>TODAY'S <span style={{ color: accent }}>LIFT</span></div>
-              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
+              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: t.textMuted, letterSpacing: 0.3 }}>{Math.round((Date.now() - workout.startTime) / 60000)} min</div>}
-              <button onClick={() => setShow1RM(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3, minHeight: 44, touchAction: "manipulation" }}>1RM</button>
-              <button onClick={() => setShowPlateCalc(true)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "10px 18px", fontSize: 13, fontWeight: 600, color: t.textSub, cursor: "pointer", letterSpacing: 0.3, minHeight: 44, touchAction: "manipulation" }}>Plates</button>
+            <TopActions>
+              {workout && <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: t.textMuted, letterSpacing: 0.3, whiteSpace: "nowrap", flexShrink: 0 }}>{Math.round((Date.now() - workout.startTime) / 60000)}m</div>}
+              <IconBtn icon="moreH" onClick={() => setShowTools(true)} label="Tools" />
               <HelpBtn page="log" onOpen={() => setHelpPage("log")} />
-            </div>
+            </TopActions>
           </div>
 
           <RestTimer />
@@ -3793,6 +3835,7 @@ export default function App() {
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} toggleTheme={toggleTheme} onEditProfile={() => { setShowSettings(false); setProfileDraft({ ...(data.profile || {}) }); setEditingProfile(true); setView("profile"); }} />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
+      {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} />}
 
       {/* ── SIGN OUT — fixed above nav on profile tab ── */}
       {view === "profile" && (
