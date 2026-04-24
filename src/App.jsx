@@ -147,7 +147,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.28";
+const APP_VERSION = "2.4.29";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -2924,16 +2924,126 @@ const BAR_OPTIONS = {
   kg:  [{ label: "20 kg (Olympic)", val: 20 }, { label: "15 kg (Women's)", val: 15 }],
 };
 
-function calcPlates(target, barWeight, unit) {
-  const plates = unit === "kg" ? PLATES_KG : PLATES_LBS;
+function calcPlates(target, barWeight, unit, customPlates) {
+  const defaults = unit === "kg" ? PLATES_KG : PLATES_LBS;
+  const available = (customPlates && customPlates.length) ? customPlates.slice().sort((a, b) => b - a) : defaults;
   let remaining = Math.round(((target - barWeight) / 2) * 1000) / 1000;
   if (remaining < 0) return null;
   const result = [];
-  for (const plate of plates) {
+  for (const plate of available) {
     const count = Math.floor(remaining / plate);
     if (count > 0) { result.push({ weight: plate, count }); remaining = Math.round((remaining - plate * count) * 1000) / 1000; }
   }
   return { plates: result, remainder: Math.round(remaining * 1000) / 1000 };
+}
+
+// ── Fix #84: Warmup Calculator ────────────────────────────────────────
+// Given a working-set weight, generate a 4-set warmup ladder.
+// Scheme: empty bar × 8 → ~50% × 5 → ~70% × 3 → ~85% × 1.
+function computeWarmup(targetWeight, barWeight, unit, customPlates) {
+  const minIncrement = unit === "kg" ? 2.5 : 5;
+  const rounder = (w) => Math.round(w / minIncrement) * minIncrement;
+  if (!targetWeight || targetWeight <= barWeight) return [];
+  const steps = [
+    { label: "Empty bar", weight: barWeight, reps: 8 },
+    { label: "~50%",       weight: rounder(targetWeight * 0.5), reps: 5 },
+    { label: "~70%",       weight: rounder(targetWeight * 0.7), reps: 3 },
+    { label: "~85%",       weight: rounder(targetWeight * 0.85), reps: 1 },
+  ];
+  // Deduplicate near-identical weights (e.g., target is low and two steps collapse)
+  const seen = new Set();
+  const unique = steps.filter(s => {
+    if (s.weight >= targetWeight) return false;
+    if (seen.has(s.weight)) return false;
+    seen.add(s.weight);
+    return true;
+  });
+  return unique.map(s => ({
+    ...s,
+    plates: calcPlates(s.weight, barWeight, unit, customPlates?.[unit]),
+  }));
+}
+
+function WarmupCalculator({ onClose, customPlates }) {
+  const t = useT(); const S = useS();
+  const [target, setTarget] = useState("");
+  const [unit, setUnit] = useState("lbs");
+  const [barWeight, setBarWeight] = useState(45);
+  const targetNum = parseFloat(target) || 0;
+  const sets = computeWarmup(targetNum, barWeight, unit, customPlates);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+      <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "88vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 14 }}>
+          Warm-Up <span style={{ color: accent }}>Generator</span>
+        </div>
+        <div style={{ fontSize: 12, color: t.textMuted, lineHeight: 1.5, marginBottom: 14 }}>
+          Enter your working set weight. The ladder below scales a progression to get you ready without burning reps.
+        </div>
+
+        {/* Unit toggle */}
+        <div style={{ display: "flex", background: t.surfaceHigh, borderRadius: 10, padding: 3, marginBottom: 14, gap: 3 }}>
+          {["lbs", "kg"].map(u => (
+            <button key={u} onClick={() => { setUnit(u); setTarget(""); setBarWeight(u === "kg" ? 20 : 45); }} style={{ flex: 1, background: unit === u ? accent : "transparent", color: unit === u ? "#fff" : t.textMuted, border: "none", borderRadius: 7, padding: "8px 0", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>{u.toUpperCase()}</button>
+          ))}
+        </div>
+        {/* Bar weight */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Bar Weight</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {BAR_OPTIONS[unit].map(opt => (
+            <button key={opt.val} onClick={() => setBarWeight(opt.val)} style={{ flex: 1, background: barWeight === opt.val ? `${accent}22` : t.surfaceHigh, border: `1px solid ${barWeight === opt.val ? accent : t.border}`, borderRadius: 10, padding: "9px 8px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: barWeight === opt.val ? accent : t.textSub }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {/* Target input */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Working Set ({unit})</div>
+        <input
+          type="number" value={target} onChange={e => setTarget(e.target.value)} onFocus={e => e.target.select()} placeholder={unit === "kg" ? "e.g. 140" : "e.g. 315"}
+          autoFocus inputMode="decimal"
+          style={{ ...S.inputStyle({ width: "100%", fontSize: 22, padding: "12px 14px", borderRadius: 12, marginBottom: 16 }) }}
+        />
+
+        {targetNum > 0 && sets.length > 0 && (
+          <>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Warm-Up Ladder</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {sets.map((s, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
+                  <div style={{ width: 36, textAlign: "center", fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: t.textMuted }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: accent, lineHeight: 1 }}>{s.weight} <span style={{ fontSize: 12, color: t.textMuted }}>{unit}</span> × {s.reps}</div>
+                    <div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>
+                      {s.label}
+                      {s.plates && s.plates.plates.length > 0 && (
+                        <span> · each side: {s.plates.plates.map(p => `${p.count}×${p.weight}`).join(" + ")}</span>
+                      )}
+                      {s.plates && s.plates.plates.length === 0 && <span> · just the bar</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, background: `${accent}12`, border: `1px solid ${accent}33`, borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ width: 36, textAlign: "center" }}><span style={{ fontSize: 18 }}>🏋️</span></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: accent, lineHeight: 1 }}>{targetNum} <span style={{ fontSize: 12, color: t.textMuted }}>{unit}</span> × working</div>
+                  <div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>Your working set</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: t.textMuted, textAlign: "center", lineHeight: 1.5 }}>
+              Rest 60–90s between warm-up sets · full rest before working sets
+            </div>
+          </>
+        )}
+        {targetNum > 0 && targetNum <= barWeight && (
+          <div style={{ fontSize: 12, color: t.textMuted, padding: "12px 0", textAlign: "center" }}>Working set is at or below the bar weight — no warm-up needed.</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Templates ─────────────────────────────────────────────────────────
@@ -3228,13 +3338,17 @@ function OneRMCalculator({ onClose, formula = "avg" }) {
   );
 }
 
-function PlateCalculator({ onClose }) {
+function PlateCalculator({ onClose, customPlates, onCustomPlatesChange }) {
   const t = useT(); const S = useS();
   const [target, setTarget] = useState("");
   const [unit, setUnit] = useState("lbs");
   const [barWeight, setBarWeight] = useState(45);
+  const [showCustomPlates, setShowCustomPlates] = useState(false);
   const COLORS = unit === "kg" ? PLATE_COLORS_KG : PLATE_COLORS_LBS;
-  const result = target ? calcPlates(parseFloat(target) || 0, barWeight, unit) : null;
+  const allPlates = unit === "kg" ? PLATES_KG : PLATES_LBS;
+  const customForUnit = customPlates?.[unit];
+  const activePlates = (customForUnit && customForUnit.length) ? customForUnit : allPlates;
+  const result = target ? calcPlates(parseFloat(target) || 0, barWeight, unit, activePlates) : null;
   const total = result ? barWeight + result.plates.reduce((s, p) => s + p.weight * p.count * 2, 0) : 0;
   const targetNum = parseFloat(target) || 0;
 
@@ -3304,6 +3418,36 @@ function PlateCalculator({ onClose }) {
             </button>
           ))}
         </div>
+
+        {/* Fix #79: Customize available plates per gym */}
+        {onCustomPlatesChange && (
+          <div style={{ marginBottom: 14 }}>
+            <button onClick={() => setShowCustomPlates(v => !v)} style={{ background: "transparent", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0, letterSpacing: 0.3 }}>
+              {showCustomPlates ? "Hide" : "Customize"} plates at my gym {showCustomPlates ? "▲" : "▼"}
+            </button>
+            {showCustomPlates && (
+              <div style={{ marginTop: 8, padding: "10px 12px", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 10 }}>
+                <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
+                  Tap a plate to toggle it. Greyed-out plates won't be used in calculations.
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {allPlates.map(p => {
+                    const enabled = activePlates.includes(p);
+                    return (
+                      <button key={p} onClick={() => {
+                        const current = (customForUnit && customForUnit.length) ? customForUnit.slice() : allPlates.slice();
+                        const next = enabled ? current.filter(x => x !== p) : [...current, p];
+                        onCustomPlatesChange({ ...(customPlates || {}), [unit]: next.sort((a, b) => b - a) });
+                      }} style={{ background: enabled ? `${COLORS[p] || accent}22` : "transparent", border: `1px solid ${enabled ? (COLORS[p] || accent) : t.border}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: enabled ? (COLORS[p] || accent) : t.textMuted, cursor: "pointer", opacity: enabled ? 1 : 0.5, touchAction: "manipulation" }}>
+                        {p} {unit}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Target input */}
         <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Target Weight ({unit})</div>
@@ -3595,11 +3739,12 @@ function HistoryMenu({ onClose, onExportAll, onExportFiltered, filteredCount, to
   );
 }
 
-function ToolsMenu({ onClose, on1RM, onPlates }) {
+function ToolsMenu({ onClose, on1RM, onPlates, onWarmup }) {
   const t = useT();
   const items = [
-    { icon: "zap",      label: "1RM Calculator",   sub: "Estimate your 1-rep max from any weight × reps",      onClick: on1RM },
-    { icon: "dumbbell", label: "Plate Calculator", sub: "Pick a target weight, see the plates you need", onClick: onPlates },
+    { icon: "zap",      label: "1RM Calculator",    sub: "Estimate your 1-rep max from any weight × reps",     onClick: on1RM },
+    { icon: "dumbbell", label: "Plate Calculator",  sub: "Pick a target weight, see the plates you need",      onClick: onPlates },
+    { icon: "timer",    label: "Warm-Up Generator", sub: "Ladder up to a working set — 4 warmup sets scaled",  onClick: onWarmup },
   ];
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
@@ -4000,6 +4145,7 @@ export default function App() {
   const [historyRange, setHistoryRange] = useState(null); // { from: "YYYY-MM-DD", to: "YYYY-MM-DD" }
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const [showWarmup, setShowWarmup] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
@@ -5061,7 +5207,8 @@ export default function App() {
 
       {/* ── HELP MODAL ───────────────────── */}
       {helpPage && <HelpModal page={helpPage} onClose={() => setHelpPage(null)} onReplayTour={() => { setHelpPage(null); setShowTour(true); }} />}
-      {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} />}
+      {showPlateCalc && <PlateCalculator onClose={() => setShowPlateCalc(false)} customPlates={(data.workoutPrefs && data.workoutPrefs.customPlates) || null} onCustomPlatesChange={(next) => save({ ...data, workoutPrefs: { ...(data.workoutPrefs || {}), customPlates: next } })} />}
+      {showWarmup && <WarmupCalculator onClose={() => setShowWarmup(false)} customPlates={(data.workoutPrefs && data.workoutPrefs.customPlates) || null} />}
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} formula={(data.workoutPrefs && data.workoutPrefs.oneRMFormula) || "avg"} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
@@ -5076,7 +5223,7 @@ export default function App() {
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
       />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
-      {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} />}
+      {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} onWarmup={() => setShowWarmup(true)} />}
       {showManageTags && <ManageTagsModal customTags={data.customTags} onClose={() => setShowManageTags(false)} onChange={(next) => save({ ...data, customTags: next })} />}
       {showTour && <OnboardingTour onDone={() => { setShowTour(false); save({ ...data, profile: { ...(data.profile || {}), onboarded: true } }); }} />}
       {/* Fix #54: Profile saved toast */}
