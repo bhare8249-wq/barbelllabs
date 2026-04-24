@@ -150,7 +150,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.31";
+const APP_VERSION = "2.4.32";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -787,6 +787,23 @@ const GOALS = [
   { id: "cardio",   label: "Cardio",        emoji: "🏃", desc: "Endurance & fitness",   color: "#5bb85b" },
   { id: "cut",      label: "Cut / Lean Out",emoji: "🔥", desc: "Fat loss & definition", color: "#ff9500" },
   { id: "maintain", label: "Maintain",      emoji: "⚖️", desc: "Stay consistent",       color: "#b55bd5" },
+];
+
+// Fix #46: profile field options
+const SEX_OPTIONS = [
+  { id: "male",   label: "Male" },
+  { id: "female", label: "Female" },
+  { id: "other",  label: "Other / Prefer not to say" },
+];
+const EXPERIENCE_LEVELS = [
+  { id: "beginner",     label: "Beginner",     desc: "< 1 year of consistent training" },
+  { id: "intermediate", label: "Intermediate", desc: "1–3 years" },
+  { id: "advanced",     label: "Advanced",     desc: "3+ years" },
+];
+const TRAINING_LOCATIONS = [
+  { id: "gym",  label: "Commercial Gym", emoji: "🏋️" },
+  { id: "home", label: "Home",           emoji: "🏠" },
+  { id: "both", label: "Both",           emoji: "🔄" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -2614,7 +2631,7 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
                 })}
               </div>
             </div>
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 8 }}>Effort Metric</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {[
@@ -2624,6 +2641,25 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
                   const active = (workoutPrefs?.effortMetric || "rpe") === opt.id;
                   return (
                     <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                      <span>{opt.label}</span>
+                      <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Fix #46: Units preference (display-only for now; full conversion is a separate task) */}
+            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 4 }}>Units</div>
+              <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 8 }}>Affects how new entries are labeled. Existing data isn't auto-converted yet.</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {[
+                  { id: "imperial", label: "Imperial", sub: "lbs / inches" },
+                  { id: "metric",   label: "Metric",   sub: "kg / cm" },
+                ].map(opt => {
+                  const active = (workoutPrefs?.units || "imperial") === opt.id;
+                  return (
+                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
                       <span>{opt.label}</span>
                       <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
                     </button>
@@ -5197,8 +5233,11 @@ export default function App() {
               </TopActions>
             </div>
             <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${t.surfaceHigh}, ${t.surface})`, border: `2px solid ${p.goal ? (GOALS.find(g => g.id === p.goal)?.color || t.border) : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto", boxShadow: "0 0 24px rgba(0,0,0,0.2)" }}>
-                {p.firstName ? p.firstName[0].toUpperCase() : <Icon name="user" size={32} />}
+              {/* Fix #41: pull Google photoURL when available; fall back to initial / icon */}
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${t.surfaceHigh}, ${t.surface})`, border: `2px solid ${p.goal ? (GOALS.find(g => g.id === p.goal)?.color || t.border) : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto", boxShadow: "0 0 24px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+                {firebaseUser?.photoURL
+                  ? <img src={firebaseUser.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  : (p.firstName ? p.firstName[0].toUpperCase() : <Icon name="user" size={32} />)}
               </div>
             </div>
             {isEditing ? (
@@ -5239,6 +5278,48 @@ export default function App() {
                 </div>
                 <div style={{ marginBottom: 20 }}>
                   <label style={lbl}>City</label><input value={draft.city || ""} onChange={e => setDraft("city", e.target.value)} placeholder="e.g. Toronto" style={pField} />
+                </div>
+                {/* Fix #46: Lifestyle / training context */}
+                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1, color: t.textMuted, marginBottom: 12 }}>LIFESTYLE</div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={lbl}>Sex / Gender</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                    {SEX_OPTIONS.map(opt => {
+                      const active = draft.sex === opt.id;
+                      return (
+                        <button key={opt.id} onClick={() => setDraft("sex", active ? null : opt.id)} style={{ background: active ? `${accent}22` : t.inputBg, border: `1px solid ${active ? accent : t.border}`, borderRadius: 10, padding: "10px 6px", fontSize: 12, fontWeight: 700, color: active ? accent : t.textSub, cursor: "pointer", touchAction: "manipulation" }}>{opt.label}</button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: 10, color: t.textMuted, marginTop: 4 }}>Used for strength-standards comparison.</div>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={lbl}>Training Experience</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {EXPERIENCE_LEVELS.map(opt => {
+                      const active = draft.experience === opt.id;
+                      return (
+                        <button key={opt.id} onClick={() => setDraft("experience", active ? null : opt.id)} style={{ background: active ? `${accent}18` : t.inputBg, border: `1px solid ${active ? accent : t.border}`, borderRadius: 12, padding: "11px 14px", textAlign: "left", cursor: "pointer", touchAction: "manipulation" }}>
+                          <div style={{ color: active ? accent : t.text, fontWeight: 700, fontSize: 13 }}>{opt.label}</div>
+                          <div style={{ color: t.textMuted, fontSize: 11, marginTop: 1 }}>{opt.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={lbl}>Primary Training Location</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                    {TRAINING_LOCATIONS.map(opt => {
+                      const active = draft.trainingLocation === opt.id;
+                      return (
+                        <button key={opt.id} onClick={() => setDraft("trainingLocation", active ? null : opt.id)} style={{ background: active ? `${accent}22` : t.inputBg, border: `1px solid ${active ? accent : t.border}`, borderRadius: 10, padding: "11px 6px", fontSize: 12, fontWeight: 700, color: active ? accent : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, touchAction: "manipulation" }}>
+                          <span style={{ fontSize: 16 }}>{opt.emoji}</span>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1, color: t.textMuted, marginBottom: 12 }}>CURRENT GOAL</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
@@ -5294,7 +5375,18 @@ export default function App() {
                 <div style={S.card()}>
                   <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1, color: t.textMuted, marginBottom: 14 }}>PERSONAL INFO</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                    {[{ label: "First Name", val: dv(p.firstName) }, { label: "Last Name", val: dv(p.lastName) }, { label: "Age", val: dv(p.age, " yrs") }, { label: "Weight", val: dv(p.weight, " lbs") }, { label: "Height", val: (p.heightFt || p.heightIn) ? `${p.heightFt || 0}' ${p.heightIn || 0}"` : <span style={{ color: t.textMuted }}>—</span> }, { label: "Country", val: dv(p.country) }, { label: "Location", val: [p.city, p.region].filter(Boolean).join(", ") || <span style={{ color: t.textMuted }}>—</span> }].map(f => (
+                    {[
+                      { label: "First Name", val: dv(p.firstName) },
+                      { label: "Last Name",  val: dv(p.lastName) },
+                      { label: "Age",        val: dv(p.age, " yrs") },
+                      { label: "Sex",        val: p.sex ? (SEX_OPTIONS.find(s => s.id === p.sex)?.label || dv(p.sex)) : dv(null) },
+                      { label: "Weight",     val: dv(p.weight, " lbs") },
+                      { label: "Height",     val: (p.heightFt || p.heightIn) ? `${p.heightFt || 0}' ${p.heightIn || 0}"` : <span style={{ color: t.textMuted }}>—</span> },
+                      { label: "Experience", val: p.experience ? (EXPERIENCE_LEVELS.find(x => x.id === p.experience)?.label || dv(p.experience)) : dv(null) },
+                      { label: "Trains At",  val: p.trainingLocation ? (TRAINING_LOCATIONS.find(x => x.id === p.trainingLocation)?.label || dv(p.trainingLocation)) : dv(null) },
+                      { label: "Country",    val: dv(p.country) },
+                      { label: "Location",   val: [p.city, p.region].filter(Boolean).join(", ") || <span style={{ color: t.textMuted }}>—</span> },
+                    ].map(f => (
                       <div key={f.label}><div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{f.label}</div><div style={{ fontSize: 16, fontWeight: 600, color: t.text }}>{f.val}</div></div>
                     ))}
                   </div>
