@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { auth, googleProvider, db } from "./firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -13,6 +13,9 @@ import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  verifyBeforeUpdateEmail,
+  sendPasswordResetEmail,
+  deleteUser,
 } from "firebase/auth";
 import { HELP_CONTENT } from "./helpContent";
 
@@ -147,7 +150,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.29";
+const APP_VERSION = "2.4.30";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -2202,16 +2205,20 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
 }
 
 // ── Security Settings Component ───────────────────────────────────────
-function SecuritySettings() {
+function SecuritySettings({ onDeleteAccount }) {
   const t = useT();
   const [showSecurity, setShowSecurity] = useState(false);
   const [secTab, setSecTab] = useState("email");
   const [newEmail, setNewEmail] = useState("");
+  // Fix #52: email change now requires current password re-auth
+  const [emailCurrentPw, setEmailCurrentPw] = useState("");
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [secMsg, setSecMsg] = useState(null);
   const [secVerify, setSecVerify] = useState(false);
+  // Fix #57: forgot-password link sends reset email
+  const [resetSent, setResetSent] = useState(false);
 
   const pField = { background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 0, WebkitAppearance: "none" };
   const lbl = { fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, display: "block", fontWeight: 700 };
@@ -2224,7 +2231,11 @@ function SecuritySettings() {
   ];
   const pwValid = pwRules.every(r => r.ok);
 
+  // Fix #52: require current password, send verification link to NEW email
+  // BEFORE the change takes effect (verifyBeforeUpdateEmail). This way a
+  // stolen session can't silently reassign the account by swapping the email.
   const handleEmailChange = async () => {
+    if (!emailCurrentPw) { setSecMsg({ type: "error", text: "Enter your current password to confirm." }); return; }
     if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
       setSecMsg({ type: "error", text: "Please enter a valid email address." }); return;
     }
@@ -2232,16 +2243,32 @@ function SecuritySettings() {
       setSecMsg({ type: "error", text: "That's already your current email." }); return;
     }
     try {
-      await updateEmail(auth.currentUser, newEmail);
-      await sendEmailVerification(auth.currentUser);
+      // Re-authenticate with current password first
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, emailCurrentPw);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      // Send verification to new email; Firebase holds the change until the link is clicked
+      await verifyBeforeUpdateEmail(auth.currentUser, newEmail);
       setSecVerify(true);
       setSecMsg({ type: "success", text: `Verification sent to ${newEmail}` });
+      setEmailCurrentPw("");
     } catch (err) {
-      if (err.code === "auth/requires-recent-login") {
-        setSecMsg({ type: "error", text: "Please sign out and sign back in before changing your email." });
+      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setSecMsg({ type: "error", text: "Current password is incorrect." });
+      } else if (err.code === "auth/requires-recent-login") {
+        setSecMsg({ type: "error", text: "Session too old — sign out and sign back in, then retry." });
       } else {
         setSecMsg({ type: "error", text: err.message });
       }
+    }
+  };
+
+  // Fix #57: forgot-password link from within Change Password tab
+  const handleForgotPassword = async () => {
+    try {
+      await sendPasswordResetEmail(auth, auth.currentUser.email);
+      setResetSent(true);
+    } catch (err) {
+      setSecMsg({ type: "error", text: err.message || "Could not send reset email." });
     }
   };
 
@@ -2310,8 +2337,13 @@ function SecuritySettings() {
               <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
                 Current: <span style={{ color: t.text, fontWeight: 600 }}>{auth.currentUser?.email || "—"}</span>
               </div>
+              <label style={lbl}>Current Password</label>
+              <input type="password" value={emailCurrentPw} onChange={e => { setEmailCurrentPw(e.target.value); setSecMsg(null); }} placeholder="Enter to confirm it's you" style={{ ...pField, marginBottom: 12 }} />
               <label style={lbl}>New Email Address</label>
-              <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setSecMsg(null); }} placeholder="new@email.com" style={{ ...pField, marginBottom: 12 }} />
+              <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setSecMsg(null); }} placeholder="new@email.com" style={{ ...pField, marginBottom: 6 }} />
+              <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+                We'll email a verification link to the new address. The change only takes effect once you click it.
+              </div>
               <button onClick={handleEmailChange} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 12, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
                 Update Email
               </button>
@@ -2320,7 +2352,12 @@ function SecuritySettings() {
 
           {secTab === "password" && (
             <div>
-              <label style={lbl}>Current Password</label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                <label style={{ ...lbl, marginBottom: 0 }}>Current Password</label>
+                <button onClick={handleForgotPassword} disabled={resetSent} style={{ background: "transparent", border: "none", color: resetSent ? "#5bb85b" : accent, fontSize: 11, fontWeight: 700, cursor: resetSent ? "default" : "pointer", padding: 0 }}>
+                  {resetSent ? "✓ Reset email sent" : "Forgot password?"}
+                </button>
+              </div>
               <input type="password" value={currentPw} onChange={e => { setCurrentPw(e.target.value); setSecMsg(null); }} placeholder="Enter current password" style={{ ...pField, marginBottom: 12 }} />
               <label style={lbl}>New Password</label>
               <input type="password" value={newPw} onChange={e => { setNewPw(e.target.value); setSecMsg(null); }} placeholder="Enter new password" style={{ ...pField, marginBottom: 8 }} />
@@ -2345,8 +2382,92 @@ function SecuritySettings() {
               {secMsg.text}
             </div>
           )}
+
+          {/* Fix #45: Delete Account entry point — lives inside Security Settings so it's discoverable but not foot-gunny */}
+          {onDeleteAccount && (
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${t.border}` }}>
+              <button onClick={onDeleteAccount} style={{ width: "100%", background: "transparent", border: "1px solid rgba(213,91,91,0.35)", color: "#d55b5b", borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>
+                Delete Account…
+              </button>
+              <div style={{ fontSize: 10, color: t.textMuted, marginTop: 6, textAlign: "center", lineHeight: 1.5 }}>
+                Permanently removes your account and all workout data. You'll be asked to confirm.
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Fix #45: Delete Account flow — confirm, re-auth, offer export, hard delete
+function DeleteAccountModal({ onClose, onExport, onDeleted }) {
+  const t = useT();
+  const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const canDelete = !!password && confirmText.trim().toUpperCase() === "DELETE" && !busy;
+
+  const doDelete = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("No user session.");
+      // Re-auth
+      const credential = EmailAuthProvider.credential(user.email, password);
+      await reauthenticateWithCredential(user, credential);
+      // Delete Firestore user doc first (best-effort), then delete auth record
+      try { await deleteDoc(doc(db, "users", user.uid)); } catch {}
+      await deleteUser(user);
+      onDeleted?.();
+    } catch (e) {
+      if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+        setErr("Current password is incorrect.");
+      } else if (e.code === "auth/requires-recent-login") {
+        setErr("Session too old — sign out and sign back in, then retry.");
+      } else {
+        setErr(e.message || "Could not delete account.");
+      }
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }} />
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 30px", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)", maxHeight: "90dvh", overflowY: "auto", border: "1px solid rgba(213,91,91,0.3)", borderBottom: "none" }}>
+        <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 14px" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: 28 }}>⚠️</span>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: "#d55b5b" }}>Delete Account</div>
+        </div>
+        <div style={{ fontSize: 13, color: t.textSub, lineHeight: 1.6, marginBottom: 14 }}>
+          This permanently removes your account, profile, workouts, templates, tags, and all other data. <strong style={{ color: "#d55b5b" }}>This cannot be undone.</strong>
+        </div>
+
+        {onExport && (
+          <button onClick={onExport} style={{ width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, color: t.text, borderRadius: 12, padding: "11px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14, touchAction: "manipulation" }}>
+            <Icon name="download" size={14} /> Export my data first (CSV)
+          </button>
+        )}
+
+        <label style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, display: "block", fontWeight: 700 }}>Current Password</label>
+        <input type="password" value={password} onChange={e => { setPassword(e.target.value); setErr(null); }} placeholder="Confirm it's you" style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 12 }} />
+
+        <label style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, display: "block", fontWeight: 700 }}>Type DELETE to confirm</label>
+        <input type="text" value={confirmText} onChange={e => { setConfirmText(e.target.value); setErr(null); }} placeholder="DELETE" autoCapitalize="characters" style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 14 }} />
+
+        {err && <div style={{ color: "#d55b5b", fontSize: 12, marginBottom: 10, background: "rgba(213,91,91,0.1)", border: "1px solid rgba(213,91,91,0.3)", borderRadius: 8, padding: "8px 12px" }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onClose} disabled={busy} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 12, padding: "13px 0", fontSize: 14, fontWeight: 600, cursor: busy ? "default" : "pointer" }}>Cancel</button>
+          <button onClick={doDelete} disabled={!canDelete} style={{ flex: 2, background: canDelete ? "#d55b5b" : t.surfaceHigh, border: "none", color: canDelete ? "#fff" : t.textMuted, borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: canDelete ? "pointer" : "default" }}>
+            {busy ? "DELETING…" : "DELETE FOREVER"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2399,7 +2520,7 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs }) {
+function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2517,7 +2638,7 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
         {/* Security */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Account Security</div>
-          <SecuritySettings />
+          <SecuritySettings onDeleteAccount={onDeleteAccount} />
         </div>
         {/* Data & Privacy */}
         {onExport && (
@@ -4146,6 +4267,7 @@ export default function App() {
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showWarmup, setShowWarmup] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
@@ -5221,6 +5343,12 @@ export default function App() {
         onExport={() => { setShowSettings(false); exportCSV(); }}
         workoutPrefs={data.workoutPrefs || {}}
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
+        onDeleteAccount={() => { setShowSettings(false); setShowDeleteAccount(true); }}
+      />}
+      {showDeleteAccount && <DeleteAccountModal
+        onClose={() => setShowDeleteAccount(false)}
+        onExport={() => exportCSV("all")}
+        onDeleted={() => { setShowDeleteAccount(false); /* Firestore + auth record are gone; onAuthStateChanged will unmount the app */ }}
       />}
       {showNotifs && <NotificationsModal notifications={notifications} onClose={() => setShowNotifs(false)} onMarkAllRead={markAllNotifsRead} onClearAll={clearAllNotifs} onToggleRead={toggleNotifRead} />}
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} onWarmup={() => setShowWarmup(true)} />}
