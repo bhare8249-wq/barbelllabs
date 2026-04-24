@@ -147,7 +147,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.25";
+const APP_VERSION = "2.4.26";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -780,7 +780,7 @@ const tagRenderCfg = (tag) => {
 
 const GOALS = [
   { id: "muscle",   label: "Build Muscle",  emoji: "💪", desc: "Hypertrophy & size",    color: "#5b9bd5" },
-  { id: "strength", label: "Strength",      emoji: "🏋️", desc: "Max power & 1RM",      color: "#d55b5b" },
+  { id: "strength", label: "Strength",      emoji: "🏋️", desc: "Max power & 1RM",      color: "#D4A64E" },
   { id: "cardio",   label: "Cardio",        emoji: "🏃", desc: "Endurance & fitness",   color: "#5bb85b" },
   { id: "cut",      label: "Cut / Lean Out",emoji: "🔥", desc: "Fat loss & definition", color: "#ff9500" },
   { id: "maintain", label: "Maintain",      emoji: "⚖️", desc: "Stay consistent",       color: "#b55bd5" },
@@ -4741,7 +4741,6 @@ export default function App() {
               <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${t.surfaceHigh}, ${t.surface})`, border: `2px solid ${p.goal ? (GOALS.find(g => g.id === p.goal)?.color || t.border) : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto", boxShadow: "0 0 24px rgba(0,0,0,0.2)" }}>
                 {p.firstName ? p.firstName[0].toUpperCase() : <Icon name="user" size={32} />}
               </div>
-              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 8 }}>Signed in as <span style={{ fontWeight: 700, color: t.textSub }}>@{authedUser}</span></div>
             </div>
             {isEditing ? (
               <div>
@@ -4775,9 +4774,12 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                   <div><label style={lbl}>Country</label><input value={draft.country || ""} onChange={e => setDraft("country", e.target.value)} placeholder="e.g. Canada" style={pField} /></div>
-                  <div><label style={lbl}>City</label><input value={draft.city || ""} onChange={e => setDraft("city", e.target.value)} placeholder="e.g. Toronto" style={pField} /></div>
+                  <div><label style={lbl}>Region / State</label><input value={draft.region || ""} onChange={e => setDraft("region", e.target.value)} placeholder="e.g. ON" style={pField} /></div>
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={lbl}>City</label><input value={draft.city || ""} onChange={e => setDraft("city", e.target.value)} placeholder="e.g. Toronto" style={pField} />
                 </div>
                 <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1, color: t.textMuted, marginBottom: 12 }}>CURRENT GOAL</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
@@ -4801,7 +4803,7 @@ export default function App() {
                 <div style={S.card()}>
                   <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1, color: t.textMuted, marginBottom: 14 }}>PERSONAL INFO</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                    {[{ label: "First Name", val: dv(p.firstName) }, { label: "Last Name", val: dv(p.lastName) }, { label: "Age", val: dv(p.age, " yrs") }, { label: "Weight", val: dv(p.weight, " lbs") }, { label: "Height", val: (p.heightFt || p.heightIn) ? `${p.heightFt || 0}' ${p.heightIn || 0}"` : <span style={{ color: t.textMuted }}>—</span> }, { label: "Country", val: dv(p.country) }, { label: "City", val: dv(p.city) }].map(f => (
+                    {[{ label: "First Name", val: dv(p.firstName) }, { label: "Last Name", val: dv(p.lastName) }, { label: "Age", val: dv(p.age, " yrs") }, { label: "Weight", val: dv(p.weight, " lbs") }, { label: "Height", val: (p.heightFt || p.heightIn) ? `${p.heightFt || 0}' ${p.heightIn || 0}"` : <span style={{ color: t.textMuted }}>—</span> }, { label: "Country", val: dv(p.country) }, { label: "Location", val: [p.city, p.region].filter(Boolean).join(", ") || <span style={{ color: t.textMuted }}>—</span> }].map(f => (
                       <div key={f.label}><div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{f.label}</div><div style={{ fontSize: 16, fontWeight: 600, color: t.text }}>{f.val}</div></div>
                     ))}
                   </div>
@@ -4932,12 +4934,12 @@ export default function App() {
         }}>
           <button onClick={handleLogout} style={{
             pointerEvents: "all",
-            background: "rgba(213,91,91,0.1)",
-            border: "1px solid rgba(213,91,91,0.35)",
-            color: "#d55b5b",
+            background: t.surfaceHigh,
+            border: `1px solid ${t.border}`,
+            color: t.textMuted,
             borderRadius: 12,
             padding: "13px 48px",
-            fontSize: 14, fontWeight: 700,
+            fontSize: 14, fontWeight: 600,
             cursor: "pointer",
             boxShadow: "0 2px 16px rgba(0,0,0,0.25)",
             letterSpacing: 0.3,
