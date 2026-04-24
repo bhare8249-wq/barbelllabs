@@ -150,7 +150,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.30";
+const APP_VERSION = "2.4.31";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -2642,7 +2642,7 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
         </div>
         {/* Data & Privacy */}
         {onExport && (
-          <div style={{ marginBottom: 8 }}>
+          <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Data &amp; Privacy</div>
             <button onClick={onExport} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
               <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
@@ -2653,6 +2653,29 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
             </button>
           </div>
         )}
+        {/* Fix #60 + #63: About — Privacy / Terms links + support contact */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>About</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              { icon: "shield", label: "Privacy Policy",   href: "/privacy.html" },
+              { icon: "book",   label: "Terms of Service", href: "/terms.html" },
+              { icon: "book",   label: "User Manual",      href: "/user-manual.html" },
+              { icon: "zap",    label: "Contact Support",  href: "mailto:support@barbelllabs.ca?subject=Barbell%20Labs%20Support" },
+            ].map(item => (
+              <a key={item.label} href={item.href} target={item.href.startsWith("mailto:") ? undefined : "_blank"} rel={item.href.startsWith("mailto:") ? undefined : "noopener noreferrer"} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", color: t.text, boxSizing: "border-box", textDecoration: "none" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                  <Icon name={item.icon} size={16} />
+                  {item.label}
+                </span>
+                <Icon name="chevronRight" size={14} color={t.textMuted} />
+              </a>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: t.textMuted, textAlign: "center", marginTop: 10 }}>
+            Barbell Labs v{APP_VERSION} · Built {BUILD_DATE}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2784,6 +2807,8 @@ function LandingPage({ onNewUser }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [dob, setDob] = useState(""); // Fix #62: DOB for age gate (COPPA/GDPR)
+  const [agreedToTerms, setAgreedToTerms] = useState(false); // Fix #60
   const [error, setError] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [animIn, setAnimIn] = useState(false);
@@ -2799,7 +2824,7 @@ function LandingPage({ onNewUser }) {
 
   if (showOnboard) return <OnboardingCarousel onDone={handleOnboardDone} />;
 
-  const switchMode = (m) => { setMode(m); setError(""); setUsername(""); setEmail(""); setPassword(""); };
+  const switchMode = (m) => { setMode(m); setError(""); setUsername(""); setEmail(""); setPassword(""); setDob(""); setAgreedToTerms(false); };
 
   const handleSubmit = async () => {
     const u = username.trim(), em = email.trim();
@@ -2810,10 +2835,31 @@ function LandingPage({ onNewUser }) {
       if (!/[A-Z]/.test(password))   { setError("Password must include at least 1 uppercase letter."); return; }
       if (!/[a-z]/.test(password))   { setError("Password must include at least 1 lowercase letter."); return; }
       if (!/[0-9]/.test(password))   { setError("Password must include at least 1 digit."); return; }
+      // Fix #62: age gate — block under 13 (COPPA). EU users should really be 16 per GDPR strict, but
+      // the safer public-fitness-app floor is 13; under-16 EU users can still technically use it.
+      if (!dob) { setError("Please enter your date of birth."); return; }
+      const birth = new Date(dob);
+      if (isNaN(birth.getTime())) { setError("Please enter a valid date of birth."); return; }
+      const now = new Date();
+      let age = now.getFullYear() - birth.getFullYear();
+      const m = now.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+      if (age < 13) { setError("You must be at least 13 years old to create an account."); return; }
+      if (age > 120) { setError("Please enter a valid date of birth."); return; }
+      // Fix #60: must agree to Privacy + Terms
+      if (!agreedToTerms) { setError("Please agree to the Privacy Policy and Terms of Service."); return; }
       try {
         const cred = await createUserWithEmailAndPassword(auth, em, password);
         await updateProfile(cred.user, { displayName: u });
         await sendEmailVerification(cred.user);
+        // Fix #62 + #60: persist DOB and consent timestamp on initial user doc
+        try {
+          await setDoc(doc(db, "users", cred.user.uid), {
+            workouts: [],
+            bodyweight: [],
+            profile: { dob, termsAcceptedAt: new Date().toISOString() },
+          });
+        } catch {}
         setVerifiedEmail(em);
         setMode("verify");
         onNewUser?.();
@@ -2922,7 +2968,24 @@ function LandingPage({ onNewUser }) {
                 )}
               </div>
             </div>
-            {error && <div style={{ background: "rgba(213,91,91,0.12)", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 8, padding: "9px 13px", fontSize: 13, marginBottom: 16, marginTop: 8 }}>{error}</div>}
+            {/* Fix #62: DOB + age gate — signup only */}
+            {mode === "signup" && (
+              <div style={{ marginTop: 10 }}>
+                <label style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 6 }}>Date of Birth</label>
+                <input type="date" value={dob} onChange={e => { setDob(e.target.value); setError(""); }} max={new Date().toISOString().slice(0, 10)} style={{ ...fStyle, colorScheme: "dark" }} />
+                <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>You must be 13 or older. We use this to personalize features; it's never shared.</div>
+              </div>
+            )}
+            {/* Fix #60: Privacy + Terms consent — signup only */}
+            {mode === "signup" && (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 12, cursor: "pointer" }}>
+                <input type="checkbox" checked={agreedToTerms} onChange={e => { setAgreedToTerms(e.target.checked); setError(""); }} style={{ marginTop: 3, accentColor: accent, cursor: "pointer", flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+                  I agree to the <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none", fontWeight: 600 }}>Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none", fontWeight: 600 }}>Privacy Policy</a>.
+                </span>
+              </label>
+            )}
+            {error && <div style={{ background: "rgba(213,91,91,0.12)", border: "1px solid rgba(213,91,91,0.3)", color: "#d55b5b", borderRadius: 8, padding: "9px 13px", fontSize: 13, marginBottom: 16, marginTop: 12 }}>{error}</div>}
             <button onClick={handleSubmit} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#ffffff", border: "none", borderRadius: 11, padding: 14, marginTop: error ? 0 : 12, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1.5, fontSize: 20, cursor: "pointer" }}>
               {mode === "login" ? "SIGN IN" : "CREATE ACCOUNT"}
             </button>
@@ -3056,6 +3119,29 @@ function calcPlates(target, barWeight, unit, customPlates) {
     if (count > 0) { result.push({ weight: plate, count }); remaining = Math.round((remaining - plate * count) * 1000) / 1000; }
   }
   return { plates: result, remainder: Math.round(remaining * 1000) / 1000 };
+}
+
+// ── Fix #61: Cookie / data consent banner (dismiss-once) ──────────────
+function CookieBanner() {
+  const t = useT();
+  const [dismissed, setDismissed] = useState(() => {
+    try { return !!localStorage.getItem("bl_cookie_consent"); } catch { return false; }
+  });
+  if (dismissed) return null;
+  const accept = () => {
+    try { localStorage.setItem("bl_cookie_consent", new Date().toISOString()); } catch {}
+    setDismissed(true);
+  };
+  return (
+    <div style={{ position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)", left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)", maxWidth: 400, zIndex: 2200, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}>
+      <div style={{ fontSize: 12, color: t.textSub, lineHeight: 1.55, marginBottom: 10 }}>
+        We store workout data and a session cookie to keep you signed in. We don't sell your data or use third-party ad tracking. See the <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none", fontWeight: 600 }}>Privacy Policy</a> for details.
+      </div>
+      <button onClick={accept} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
+        GOT IT
+      </button>
+    </div>
+  );
 }
 
 // ── Fix #84: Warmup Calculator ────────────────────────────────────────
@@ -5354,6 +5440,8 @@ export default function App() {
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} onWarmup={() => setShowWarmup(true)} />}
       {showManageTags && <ManageTagsModal customTags={data.customTags} onClose={() => setShowManageTags(false)} onChange={(next) => save({ ...data, customTags: next })} />}
       {showTour && <OnboardingTour onDone={() => { setShowTour(false); save({ ...data, profile: { ...(data.profile || {}), onboarded: true } }); }} />}
+      {/* Fix #61: Cookie / data consent banner */}
+      <CookieBanner />
       {/* Fix #54: Profile saved toast */}
       {profileSavedFlash && (
         <div style={{ position: "fixed", bottom: "calc(92px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 2100, background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.45)", borderRadius: 12, padding: "10px 18px", color: "#5bb85b", fontSize: 13, fontWeight: 700, boxShadow: "0 8px 32px rgba(0,0,0,0.35)", pointerEvents: "none", animation: "bl-card-in 0.25s ease both" }}>
