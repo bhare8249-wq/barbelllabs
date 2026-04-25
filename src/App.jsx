@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.33";
+const APP_VERSION = "2.4.34";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -1612,50 +1612,184 @@ function VolumeBarChart({ workouts }) {
 }
 
 // ── Bodyweight Mini Chart ─────────────────────────────────────────────
-function BodyweightWidget({ bodyweight, onAdd }) {
+// Fix #49: historical entry, goal weight + progress viz, trend indicator, range picker.
+function BodyweightWidget({ bodyweight, onAdd, goalWeight, onSaveGoal }) {
   const t = useT(); const S = useS();
   const [input, setInput] = useState("");
-  const latest = bodyweight.length ? bodyweight[bodyweight.length - 1] : null;
-  const today  = todayISO();
+  const [pastDate, setPastDate] = useState("");
+  const [pastWeight, setPastWeight] = useState("");
+  const [showPastEntry, setShowPastEntry] = useState(false);
+  const [goalInput, setGoalInput] = useState("");
+  const [showGoalEditor, setShowGoalEditor] = useState(false);
+  const [range, setRange] = useState("90d"); // 30d | 90d | 1y | all
+
+  const sorted = [...bodyweight].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sorted.length ? sorted[sorted.length - 1] : null;
+  const today = todayISO();
   const alreadyToday = latest?.date === today;
-  const chartPoints = bodyweight.map(e => ({ date: e.date, value: e.weight }));
+
+  // Filter to the selected range for the chart
+  const rangeCutoff = (() => {
+    if (range === "all") return null;
+    const d = new Date();
+    if (range === "30d") d.setDate(d.getDate() - 30);
+    else if (range === "90d") d.setDate(d.getDate() - 90);
+    else if (range === "1y") d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const visible = rangeCutoff ? sorted.filter(e => e.date >= rangeCutoff) : sorted;
+  const chartPoints = visible.map(e => ({ date: e.date, value: e.weight }));
+
+  // Trend: latest vs oldest entry within last 30d (and 90d for secondary)
+  const trend30 = (() => {
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const windowed = sorted.filter(e => e.date >= cutoffStr);
+    if (windowed.length < 2) return null;
+    return windowed[windowed.length - 1].weight - windowed[0].weight;
+  })();
+
+  // Goal delta
+  const goalDelta = (latest && goalWeight) ? latest.weight - goalWeight : null;
+  const goalMet = goalDelta !== null && Math.abs(goalDelta) < 1;
 
   const submit = () => {
     const w = parseFloat(input);
     if (!w || w < 50 || w > 700) return;
-    onAdd(w);
+    onAdd(w, today);
     setInput("");
   };
+  const submitPast = () => {
+    const w = parseFloat(pastWeight);
+    if (!w || w < 50 || w > 700) return;
+    if (!pastDate) return;
+    onAdd(w, pastDate);
+    setPastWeight(""); setPastDate(""); setShowPastEntry(false);
+  };
+  const submitGoal = () => {
+    const w = parseFloat(goalInput);
+    if (!w || w < 50 || w > 700) { setShowGoalEditor(false); return; }
+    onSaveGoal?.(w);
+    setGoalInput("");
+    setShowGoalEditor(false);
+  };
+  const clearGoal = () => { onSaveGoal?.(null); setGoalInput(""); setShowGoalEditor(false); };
 
   return (
     <div style={S.card()}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1, color: t.textSub }}>
             BODY<span style={{ color: accent }}>WEIGHT</span>
           </div>
-          {latest
-            ? <div style={{ fontSize: 12, color: t.textMuted, marginTop: 2 }}>Last: {latest.weight} lbs · {formatDate(latest.date)}</div>
-            : <div style={{ fontSize: 12, color: t.textMuted, marginTop: 2 }}>Not logged yet — add your first entry below</div>
-          }
+          {latest ? (
+            <div style={{ fontSize: 12, color: t.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span>Last: <span style={{ color: t.text, fontWeight: 600 }}>{latest.weight} lbs</span> · {formatDate(latest.date)}</span>
+              {trend30 !== null && (
+                <span style={{ color: trend30 > 0 ? "#d5a55b" : trend30 < 0 ? "#5bb85b" : t.textMuted, fontWeight: 700 }}>
+                  {trend30 > 0 ? "▲" : trend30 < 0 ? "▼" : "—"} {Math.abs(trend30).toFixed(1)} lbs / 30d
+                </span>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: t.textMuted, marginTop: 2 }}>Not logged yet — add your first entry below</div>
+          )}
         </div>
-        {alreadyToday && <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 700 }}>✓ Logged today</div>}
+        {alreadyToday && <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 700, flexShrink: 0 }}>✓ Today</div>}
       </div>
+
+      {/* Goal display / editor */}
+      {onSaveGoal && (
+        <div style={{ marginBottom: 14, padding: "10px 12px", background: goalMet ? "rgba(91,184,91,0.08)" : `${accent}0a`, border: `1px solid ${goalMet ? "rgba(91,184,91,0.3)" : accent + "26"}`, borderRadius: 10 }}>
+          {showGoalEditor ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="number" inputMode="decimal" placeholder="Goal (lbs)" value={goalInput} onFocus={e => e.target.select()} onChange={e => setGoalInput(e.target.value)} onKeyDown={e => e.key === "Enter" && submitGoal()} style={{ ...S.inputStyle({ flex: 1, padding: "9px 12px", fontSize: 14, width: "auto" }) }} />
+              <button onClick={submitGoal} style={{ background: accent, border: "none", color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Save</button>
+              {goalWeight && <button onClick={clearGoal} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 8, padding: "9px 10px", fontSize: 12, cursor: "pointer" }}>Clear</button>}
+              <button onClick={() => setShowGoalEditor(false)} style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 6, display: "flex" }}><Icon name="x" size={14} /></button>
+            </div>
+          ) : goalWeight ? (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Goal</div>
+                <div style={{ fontSize: 14, color: t.text, fontWeight: 600 }}>
+                  {goalWeight} lbs
+                  {goalDelta !== null && (
+                    goalMet ? <span style={{ color: "#5bb85b", fontSize: 12, marginLeft: 6 }}>✓ Met your goal</span>
+                    : <span style={{ color: t.textMuted, fontSize: 12, marginLeft: 6 }}>
+                        · {Math.abs(goalDelta).toFixed(1)} lbs {goalDelta > 0 ? "to lose" : "to gain"}
+                      </span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => { setShowGoalEditor(true); setGoalInput(String(goalWeight)); }} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 8, padding: "5px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Edit</button>
+            </div>
+          ) : (
+            <button onClick={() => { setShowGoalEditor(true); setGoalInput(latest ? String(latest.weight) : ""); }} style={{ background: "transparent", border: "none", color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              + Set a goal weight
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Today quick-add */}
       {!alreadyToday && (
-        <div style={{ display: "flex", gap: 8, marginBottom: chartPoints.length ? 16 : 0 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <input
             type="number" inputMode="decimal" placeholder="Enter weight (lbs)"
-            value={input} onChange={e => setInput(e.target.value)}
+            value={input} onChange={e => setInput(e.target.value)} onFocus={e => e.target.select()}
             onKeyDown={e => e.key === "Enter" && submit()}
             style={{ ...S.inputStyle({ flex: 1, width: "auto" }) }}
           />
           <button onClick={submit} style={{ ...S.solidBtn(), padding: "12px 18px", fontSize: 13, borderRadius: 12, minHeight: 44, touchAction: "manipulation" }}>Save</button>
         </div>
       )}
+
+      {/* Past-date entry */}
+      <div style={{ marginBottom: chartPoints.length ? 14 : 0 }}>
+        {!showPastEntry ? (
+          <button onClick={() => setShowPastEntry(true)} style={{ background: "transparent", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+            + Add past entry
+          </button>
+        ) : (
+          <div style={{ padding: "10px 12px", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 10 }}>
+            <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>Log a Past Weigh-in</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="date" value={pastDate} onChange={e => setPastDate(e.target.value)} max={today} style={{ ...S.inputStyle({ padding: "9px 10px", fontSize: 13, width: "auto", flex: 1 }), colorScheme: "dark" }} />
+              <input type="number" inputMode="decimal" placeholder="lbs" value={pastWeight} onFocus={e => e.target.select()} onChange={e => setPastWeight(e.target.value)} style={{ ...S.inputStyle({ padding: "9px 10px", fontSize: 13, width: 80 }) }} />
+              <button onClick={submitPast} style={{ background: accent, border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Add</button>
+              <button onClick={() => { setShowPastEntry(false); setPastDate(""); setPastWeight(""); }} style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 6, display: "flex" }}><Icon name="x" size={14} /></button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Chart range picker */}
+      {sorted.length > 0 && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 10, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 10, padding: 3 }}>
+          {[
+            { id: "30d", label: "30D" },
+            { id: "90d", label: "90D" },
+            { id: "1y",  label: "1Y" },
+            { id: "all", label: "All" },
+          ].map(r => {
+            const active = range === r.id;
+            return (
+              <button key={r.id} onClick={() => setRange(r.id)} style={{ flex: 1, background: active ? accent : "transparent", color: active ? "#fff" : t.textMuted, border: "none", borderRadius: 7, padding: "6px 0", fontSize: 11, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>{r.label}</button>
+            );
+          })}
+        </div>
+      )}
+
       {chartPoints.length > 0 && (
         <DualLineChart points={chartPoints} lineColor="#5bb85b" />
       )}
-      {chartPoints.length === 0 && (
+      {sorted.length > 0 && chartPoints.length === 0 && (
+        <div style={{ color: t.textMuted, fontSize: 12, textAlign: "center", padding: "16px 0" }}>
+          No entries in this range — pick a wider range to see your chart.
+        </div>
+      )}
+      {sorted.length === 0 && (
         <div style={{ color: t.textMuted, fontSize: 13, textAlign: "center", padding: "12px 0" }}>
           Log your first weigh-in above to start tracking
         </div>
@@ -5532,14 +5666,17 @@ export default function App() {
                     </div>
                   );
                 })()}
-                {/* Bodyweight */}
+                {/* Bodyweight — Fix #49 */}
                 <BodyweightWidget
                   bodyweight={data.bodyweight || []}
-                  onAdd={w => {
-                    const entry = { date: todayISO(), weight: w };
-                    const existing = (data.bodyweight || []).filter(e => e.date !== todayISO());
+                  goalWeight={p.goalWeight || null}
+                  onAdd={(w, date) => {
+                    const d = date || todayISO();
+                    const entry = { date: d, weight: w };
+                    const existing = (data.bodyweight || []).filter(e => e.date !== d);
                     save({ ...data, bodyweight: [...existing, entry] });
                   }}
+                  onSaveGoal={(g) => saveProfile({ goalWeight: g })}
                 />
                 {/* Version + Manual PDF Download */}
                 <div style={{ ...S.card(), textAlign: "center" }}>
