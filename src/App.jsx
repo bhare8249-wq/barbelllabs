@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.40";
+const APP_VERSION = "2.4.41";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -4830,34 +4830,42 @@ export default function App() {
     ...GYM_BIBLE,
     ...customExNames.map(name => ({ name, cat: "custom", equip: "other", level: "beginner", muscles: "" })),
   ];
-  // Improved picker search:
-  //  - When user typed a query, IGNORE the muscle/equipment filter pills (they're too restrictive
-  //    when combined with search). Match across name + muscles + equipment so e.g. "bicep" finds
-  //    Hammer Curl via the muscle field, "barbell" finds anything barbell-tagged.
-  //  - Rank: name-starts-with > name-contains > muscles-contains > equipment-contains.
+  // Picker search (name-only):
+  //  - Search matches NAMES only. Muscle-based discovery is the job of the Muscle Group filter pills,
+  //    equipment-based discovery is the job of the Equipment pills. So typing "bicep" returns only
+  //    exercises with "bicep" in the name, not every exercise that works the bicep secondarily.
+  //  - Filter pills stay active during search and intersect with the query.
+  //  - Ranking: exact > name-starts-with > word-in-name-starts-with > contains.
+  //  - Dedupe by name at the end (GYM_BIBLE intentionally lists some exercises under multiple
+  //    categories — e.g. Dumbbell Pullover under chest+back — but the picker should show one row).
   const trimmedSearch = exSearch.trim().toLowerCase();
   const filtered = (() => {
-    if (trimmedSearch) {
-      const scored = allPickerExercises.map(ex => {
-        const name = (ex.name || "").toLowerCase();
-        const muscles = (ex.muscles || "").toLowerCase();
-        const equip = (ex.equip || "").toLowerCase();
-        let score = -1;
-        if (name.startsWith(trimmedSearch)) score = 0;
-        else if (name.includes(trimmedSearch)) score = 1;
-        else if (muscles.includes(trimmedSearch)) score = 2;
-        else if (equip.includes(trimmedSearch)) score = 3;
-        return { ex, score };
-      }).filter(s => s.score >= 0);
-      scored.sort((a, b) => a.score - b.score || a.ex.name.localeCompare(b.ex.name));
-      return scored.map(s => s.ex);
-    }
-    return allPickerExercises.filter(ex => {
+    let pool = allPickerExercises.filter(ex => {
       if (exCatFilter !== "all" && ex.cat !== exCatFilter) return false;
       if (exEquipFilter !== "all" && ex.equip !== exEquipFilter) return false;
       return true;
     });
+    if (trimmedSearch) {
+      const scored = pool.map(ex => {
+        const name = (ex.name || "").toLowerCase();
+        let score = -1;
+        if (name === trimmedSearch) score = 0;
+        else if (name.startsWith(trimmedSearch)) score = 1;
+        else if (name.split(/\s+/).some(w => w.startsWith(trimmedSearch))) score = 2;
+        else if (name.includes(trimmedSearch)) score = 3;
+        return { ex, score };
+      }).filter(s => s.score >= 0);
+      scored.sort((a, b) => a.score - b.score || a.ex.name.localeCompare(b.ex.name));
+      pool = scored.map(s => s.ex);
+    }
+    const seen = new Set();
+    return pool.filter(ex => {
+      if (seen.has(ex.name)) return false;
+      seen.add(ex.name);
+      return true;
+    });
   })();
+  const hasActiveFilters = exCatFilter !== "all" || exEquipFilter !== "all";
   // Fix #15: sort filter pills by this user's usage frequency ("All" always first)
   const orderedCats = (() => {
     const freq = {};
@@ -5284,14 +5292,17 @@ export default function App() {
                 <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
-              {/* When typing a query, filter pills are suspended — search ignores them and matches across name + muscles + equipment */}
+              {/* Match counter — search matches names only; filters remain active */}
               {trimmedSearch && (
-                <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 8, marginTop: -4, lineHeight: 1.5 }}>
-                  Filters suspended while searching · {filtered.length} match{filtered.length !== 1 ? "es" : ""}
+                <div style={{ fontSize: 11, color: filtered.length === 0 ? t.warning || "#E8B64C" : t.textMuted, marginBottom: 8, marginTop: -4, lineHeight: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span>{filtered.length} {filtered.length === 1 ? "match" : "matches"}{hasActiveFilters ? " in current filters" : ""}</span>
+                  {filtered.length === 0 && hasActiveFilters && (
+                    <button onClick={() => { setExCatFilter("all"); setExEquipFilter("all"); }} style={{ background: "transparent", border: "none", color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: "2px 0", textDecoration: "underline" }}>Clear filters</button>
+                  )}
                 </div>
               )}
               {/* Category filter chips (Fix #15: reordered by usage, snap-aligned, fade into surfaceHigh) */}
-              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 2, opacity: trimmedSearch ? 0.45 : 1 }}>Muscle Group</div>
+              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 2 }}>Muscle Group</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <div data-hswipe-safe style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedCats.map(c => {
@@ -5305,7 +5316,7 @@ export default function App() {
                 <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, ${t.surfaceHigh}00, ${t.surfaceHigh})`, pointerEvents: "none" }} />
               </div>
               {/* Equipment filter chips */}
-              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 4, opacity: trimmedSearch ? 0.45 : 1 }}>Equipment</div>
+              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 4 }}>Equipment</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <div data-hswipe-safe style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedEquips.map(eq => {
