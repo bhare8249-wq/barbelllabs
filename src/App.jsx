@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.38";
+const APP_VERSION = "2.4.39";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -4682,6 +4682,7 @@ export default function App() {
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showWarmup, setShowWarmup] = useState(false);
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState(null);
+  const [pickerAutoFocus, setPickerAutoFocus] = useState(true); // suppressed when picker auto-opens after a Done
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
@@ -5106,6 +5107,41 @@ export default function App() {
 
           <RestTimer />
 
+          {/* Finish Workout — top placement. Compact while logging, big green when all exercises done. */}
+          {workout && workout.exercises.length > 0 && !showExPicker && (() => {
+            const allDone = workout.exercises.every(e => e.done);
+            return (
+              <>
+                {allDone && (
+                  <div style={{ background: "rgba(91,184,91,0.10)", border: "1px solid rgba(91,184,91,0.4)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>🎉</span>
+                    <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 600, lineHeight: 1.4 }}>All exercises done — wrap up to save your session.</div>
+                  </div>
+                )}
+                <button onClick={finishWorkout} style={{
+                  width: "100%",
+                  background: allDone ? "linear-gradient(135deg, #5bb85b, #3a8a3a)" : "transparent",
+                  border: allDone ? "none" : `1px solid ${t.border}`,
+                  color: allDone ? "#fff" : t.textSub,
+                  borderRadius: 12,
+                  padding: allDone ? "16px 0" : "10px 0",
+                  fontFamily: "'Bebas Neue', cursive",
+                  fontSize: allDone ? 20 : 14,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  marginBottom: 14,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "none",
+                  transition: "padding 0.2s, font-size 0.2s, background 0.3s, color 0.3s, box-shadow 0.3s",
+                  touchAction: "manipulation",
+                }}>
+                  {allDone && <Icon name="check" size={18} />} Finish Workout
+                </button>
+              </>
+            );
+          })()}
+
           {/* Quick-start section — only shown when workout is empty */}
           {workout && workout.exercises.length === 0 && !showExPicker && (
             <div style={{ marginBottom: 18 }}>
@@ -5179,7 +5215,18 @@ export default function App() {
                   queueIndex={queueIndex}
                   onFocus={() => setCurrentExerciseIdx(i)}
                   effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
-                  onChange={updated => { const exercises = [...workout.exercises]; exercises[i] = updated; setWorkout({ ...workout, exercises }); if (updated.done && i === activeIdx) setCurrentExerciseIdx(null); }}
+                  onChange={updated => {
+                    const exercises = [...workout.exercises];
+                    exercises[i] = updated;
+                    setWorkout({ ...workout, exercises });
+                    if (updated.done && i === activeIdx) {
+                      setCurrentExerciseIdx(null);
+                      // If everything is now done and there's no queued exercise to flow into,
+                      // auto-open the picker so the user can add another one. No keyboard pop.
+                      const allDone = exercises.every(e => e.done);
+                      if (allDone) { setPickerAutoFocus(false); setShowExPicker(true); }
+                    }
+                  }}
                   onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
                 />
               );
@@ -5190,7 +5237,7 @@ export default function App() {
             <div style={S.card()}>
               {/* Search row */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
+                <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
               {/* Category filter chips (Fix #15: reordered by usage, snap-aligned, fade into surfaceHigh) */}
@@ -5238,25 +5285,11 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
+            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setPickerAutoFocus(true); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
               <Icon name="plus" size={15} /> Add Exercise
             </button>
           )}
-          {/* Finish Workout — visually emphasized once every exercise is marked Done. Hidden during picker. */}
-          {workout && workout.exercises.length > 0 && !showExPicker && (() => {
-            const allDone = workout.exercises.every(e => e.done);
-            return (
-              <>
-                {allDone && (
-                  <div style={{ background: "rgba(91,184,91,0.10)", border: "1px solid rgba(91,184,91,0.4)", borderRadius: 12, padding: "10px 14px", marginTop: 8, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 22, lineHeight: 1 }}>🎉</span>
-                    <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 600, lineHeight: 1.4 }}>All exercises done — wrap up to save your session.</div>
-                  </div>
-                )}
-                <button onClick={finishWorkout} style={{ ...S.solidBtn(), width: "100%", padding: allDone ? 18 : 14, borderRadius: 12, fontSize: allDone ? 22 : 18, marginTop: 4, boxShadow: allDone ? `0 8px 32px ${accentGlow}` : "none", transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s" }}>Finish Workout</button>
-              </>
-            );
-          })()}
+          {/* Finish Workout moved to the top (just under rest timer). Bottom slot removed. */}
           {(!workout || workout.exercises.length === 0) && !showExPicker && (
             <div style={{ textAlign: "center", color: t.textMuted, padding: "28px 0 0", fontSize: 14 }}>
               <div>Add exercises or load a previous workout</div>
