@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.39";
+const APP_VERSION = "2.4.40";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -4830,12 +4830,34 @@ export default function App() {
     ...GYM_BIBLE,
     ...customExNames.map(name => ({ name, cat: "custom", equip: "other", level: "beginner", muscles: "" })),
   ];
-  const filtered = allPickerExercises.filter(ex => {
-    if (exCatFilter !== "all" && ex.cat !== exCatFilter) return false;
-    if (exEquipFilter !== "all" && ex.equip !== exEquipFilter) return false;
-    if (exSearch && !ex.name.toLowerCase().includes(exSearch.toLowerCase())) return false;
-    return true;
-  });
+  // Improved picker search:
+  //  - When user typed a query, IGNORE the muscle/equipment filter pills (they're too restrictive
+  //    when combined with search). Match across name + muscles + equipment so e.g. "bicep" finds
+  //    Hammer Curl via the muscle field, "barbell" finds anything barbell-tagged.
+  //  - Rank: name-starts-with > name-contains > muscles-contains > equipment-contains.
+  const trimmedSearch = exSearch.trim().toLowerCase();
+  const filtered = (() => {
+    if (trimmedSearch) {
+      const scored = allPickerExercises.map(ex => {
+        const name = (ex.name || "").toLowerCase();
+        const muscles = (ex.muscles || "").toLowerCase();
+        const equip = (ex.equip || "").toLowerCase();
+        let score = -1;
+        if (name.startsWith(trimmedSearch)) score = 0;
+        else if (name.includes(trimmedSearch)) score = 1;
+        else if (muscles.includes(trimmedSearch)) score = 2;
+        else if (equip.includes(trimmedSearch)) score = 3;
+        return { ex, score };
+      }).filter(s => s.score >= 0);
+      scored.sort((a, b) => a.score - b.score || a.ex.name.localeCompare(b.ex.name));
+      return scored.map(s => s.ex);
+    }
+    return allPickerExercises.filter(ex => {
+      if (exCatFilter !== "all" && ex.cat !== exCatFilter) return false;
+      if (exEquipFilter !== "all" && ex.equip !== exEquipFilter) return false;
+      return true;
+    });
+  })();
   // Fix #15: sort filter pills by this user's usage frequency ("All" always first)
   const orderedCats = (() => {
     const freq = {};
@@ -5120,23 +5142,23 @@ export default function App() {
                 )}
                 <button onClick={finishWorkout} style={{
                   width: "100%",
-                  background: allDone ? "linear-gradient(135deg, #5bb85b, #3a8a3a)" : "transparent",
-                  border: allDone ? "none" : `1px solid ${t.border}`,
-                  color: allDone ? "#fff" : t.textSub,
+                  background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
+                  border: "none",
+                  color: "#fff",
                   borderRadius: 12,
-                  padding: allDone ? "16px 0" : "10px 0",
+                  padding: allDone ? "16px 0" : "13px 0",
                   fontFamily: "'Bebas Neue', cursive",
-                  fontSize: allDone ? 20 : 14,
+                  fontSize: allDone ? 20 : 16,
                   fontWeight: 700,
                   letterSpacing: 1,
                   marginBottom: 14,
                   cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "none",
-                  transition: "padding 0.2s, font-size 0.2s, background 0.3s, color 0.3s, box-shadow 0.3s",
+                  transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s",
                   touchAction: "manipulation",
                 }}>
-                  {allDone && <Icon name="check" size={18} />} Finish Workout
+                  <Icon name="check" size={allDone ? 18 : 16} /> Finish Workout
                 </button>
               </>
             );
@@ -5235,13 +5257,41 @@ export default function App() {
 
           {showExPicker ? (
             <div style={S.card()}>
+              {/* Top-of-picker Finish button — lets the user wrap up without closing search first.
+                  Always green to match 'Done with this exercise'. Only when workout has exercises. */}
+              {workout && workout.exercises.length > 0 && (
+                <button onClick={finishWorkout} style={{
+                  width: "100%",
+                  background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
+                  border: "none",
+                  color: "#fff",
+                  borderRadius: 12,
+                  padding: "12px 0",
+                  fontFamily: "'Bebas Neue', cursive",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  marginBottom: 12,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  touchAction: "manipulation",
+                }}>
+                  <Icon name="check" size={16} /> Finish Workout
+                </button>
+              )}
               {/* Search row */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
+              {/* When typing a query, filter pills are suspended — search ignores them and matches across name + muscles + equipment */}
+              {trimmedSearch && (
+                <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 8, marginTop: -4, lineHeight: 1.5 }}>
+                  Filters suspended while searching · {filtered.length} match{filtered.length !== 1 ? "es" : ""}
+                </div>
+              )}
               {/* Category filter chips (Fix #15: reordered by usage, snap-aligned, fade into surfaceHigh) */}
-              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 2 }}>Muscle Group</div>
+              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 2, opacity: trimmedSearch ? 0.45 : 1 }}>Muscle Group</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <div data-hswipe-safe style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedCats.map(c => {
@@ -5255,7 +5305,7 @@ export default function App() {
                 <div style={{ position: "absolute", right: 0, top: 0, bottom: 4, width: 32, background: `linear-gradient(to right, ${t.surfaceHigh}00, ${t.surfaceHigh})`, pointerEvents: "none" }} />
               </div>
               {/* Equipment filter chips */}
-              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 4 }}>Equipment</div>
+              <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 4, opacity: trimmedSearch ? 0.45 : 1 }}>Equipment</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <div data-hswipe-safe style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedEquips.map(eq => {
