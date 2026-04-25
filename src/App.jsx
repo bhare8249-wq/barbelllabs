@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.34";
+const APP_VERSION = "2.4.35";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -973,7 +973,7 @@ function HelpModal({ page, onClose, onReplayTour }) {
     } catch {}
   };
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
       onClick={onClose}>
       {/* Backdrop */}
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} />
@@ -1378,7 +1378,7 @@ function DualLineChart({ points, lineColor = WEIGHT_COLOR }) {
   })();
 
   return (
-    <div>
+    <div data-hswipe-safe>
       <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         <svg ref={svgRef} width={W} height={H} style={{ display: "block", overflow: "visible", touchAction: "none" }}>
           <defs>
@@ -2297,7 +2297,7 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
   };
 
   return (
-    <div style={{ position: "relative", marginBottom: 10, borderRadius: 14, overflow: "hidden" }}>
+    <div data-hswipe-safe style={{ position: "relative", marginBottom: 10, borderRadius: 14, overflow: "hidden" }}>
       {/* Delete button revealed on swipe left */}
       <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: DELETE_W, background: "#d55b5b", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", borderRadius: "0 14px 14px 0" }}
         onClick={() => { haptic([0, 60, 30, 60]); onDelete(index); }}>
@@ -2618,7 +2618,7 @@ function DeleteAccountModal({ onClose, onExport, onDeleted }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }} />
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 30px", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)", maxHeight: "90dvh", overflowY: "auto", border: "1px solid rgba(213,91,91,0.3)", borderBottom: "none" }}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 14px" }} />
@@ -2708,7 +2708,7 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}
       onClick={onClose}>
       {/* Backdrop */}
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
@@ -3291,7 +3291,7 @@ function WorkoutCompleteScreen({ workout, prevWorkouts, onClose }) {
   }));
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px", overflow: "hidden", opacity: visible ? 1 : 0, transition: "opacity 0.4s ease" }}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px", overflow: "hidden", opacity: visible ? 1 : 0, transition: "opacity 0.4s ease" }}>
       <style>{`@keyframes cffall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(115vh) rotate(720deg);opacity:0}}`}</style>
       {pieces.map(c => (
         <div key={c.id} style={{ position: "absolute", top: -12, left: `${c.left}%`, width: c.size, height: c.size, background: c.color, borderRadius: c.isCircle ? "50%" : 2, animation: `cffall ${c.dur}s ${c.delay}s ease-in forwards`, opacity: 0, pointerEvents: "none" }} />
@@ -3415,7 +3415,7 @@ function WarmupCalculator({ onClose, customPlates }) {
   const sets = computeWarmup(targetNum, barWeight, unit, customPlates);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "88vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 14 }}>
@@ -3534,7 +3534,7 @@ function SaveTemplateSheet({ exercises, existingTemplates, onSave, onClose }) {
   const t = useT(); const S = useS();
   const [name, setName] = useState(() => suggestTemplateName(exercises, existingTemplates || []));
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 36px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 6 }}>
@@ -3592,7 +3592,10 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
     if (next < -REVEAL) next = -REVEAL + (next + REVEAL) * 0.25;
     setOffset(next);
   };
-  const onTouchEnd = () => {
+  const onTouchEnd = (e) => {
+    // If we engaged a horizontal swipe, the outer view-swipe handler must NOT see this end
+    // event (otherwise it'd compute a delta from its captured start and switch tabs).
+    if (horizontalLocked.current) e.stopPropagation();
     if (offset < -40) setOffset(-REVEAL);
     else setOffset(0);
     startX.current = null;
@@ -3614,7 +3617,7 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
   };
 
   return (
-    <div style={{ position: "relative", overflow: "hidden", borderRadius: flat ? 10 : 14, marginBottom: flat ? 0 : 10, border: flat ? "none" : `1px solid ${borderColor}` }}>
+    <div data-hswipe-safe style={{ position: "relative", overflow: "hidden", borderRadius: flat ? 10 : 14, marginBottom: flat ? 0 : 10, border: flat ? "none" : `1px solid ${borderColor}` }}>
       <button onClick={handleDelete} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: REVEAL, background: "#d55b5b", border: "none", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, touchAction: "manipulation", letterSpacing: 0.3 }}>
         <Icon name="trash" size={flat ? 14 : 18} />
         {!flat && "Delete"}
@@ -3645,7 +3648,7 @@ function TemplateManager({ templates, onLoad, onDelete, onRename, onClose }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameVal, setRenameVal] = useState("");
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 36px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "80vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 18 }}>
@@ -3707,7 +3710,7 @@ function OneRMCalculator({ onClose, formula = "avg" }) {
   const PCTS = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "88vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 18 }}>
@@ -3837,7 +3840,7 @@ function PlateCalculator({ onClose, customPlates, onCustomPlatesChange }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={onClose}>
       <div style={{ background: t.surface, borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", maxWidth: 420, width: "100%", margin: "0 auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)", maxHeight: "88vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, background: t.border, borderRadius: 4, margin: "0 auto 18px" }} />
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, letterSpacing: 1, marginBottom: 14 }}>
@@ -3994,7 +3997,7 @@ function OnboardingTour({ onDone }) {
   const s = ONBOARDING_STEPS[step];
   const isLast = step === ONBOARDING_STEPS.length - 1;
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2500, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px" }}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 2500, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px" }}>
       <div style={{ width: "100%", maxWidth: 360, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 20, padding: "28px 24px", textAlign: "center", boxShadow: "0 12px 48px rgba(0,0,0,0.6)" }}>
         <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 14 }}>{s.emoji}</div>
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1.5, color: t.text, marginBottom: 10 }}>{s.title}</div>
@@ -4148,7 +4151,7 @@ function HistoryMenu({ onClose, onExportAll, onExportFiltered, filteredCount, to
   }
   items.push({ icon: "download", label: hasFilter ? `Export all (${totalCount})` : "Export Workouts (CSV)", sub: hasFilter ? "Your full workout history, ignoring current filters" : "Download your full workout history as a spreadsheet", onClick: onExportAll });
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "70dvh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
@@ -4189,7 +4192,7 @@ function ToolsMenu({ onClose, on1RM, onPlates, onWarmup }) {
     { icon: "timer",    label: "Warm-Up Generator", sub: "Ladder up to a working set — 4 warmup sets scaled",  onClick: onWarmup },
   ];
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "70dvh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
@@ -4231,7 +4234,7 @@ function ProgramBrowser({ onClose, onFork, onStart }) {
   const levelColor = (lvl) => lvl === "Beginner" ? "#5bb85b" : lvl === "Intermediate" ? "#ff9500" : "#d55b5b";
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "88dvh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
@@ -4312,7 +4315,7 @@ function NotificationsModal({ notifications, onClose, onMarkAllRead, onClearAll,
   const list = notifications || [];
   const anyUnread = list.some(n => !n.read);
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "85dvh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
@@ -4392,7 +4395,7 @@ function ManageTagsModal({ customTags, onClose, onChange }) {
   const deleteTag = (id) => onChange(list.filter(t => t.id !== id));
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "85dvh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
@@ -4595,7 +4598,16 @@ export default function App() {
   const profile = data.profile || {};
   const SWIPE_VIEWS = ["home", "log", "history", "progress", "profile"];
   const touchX = useRef(null); const touchY = useRef(null);
+  // Bail on view-swipe if the touch starts inside anything that manages its own
+  // horizontal gesture — scroll containers, SwipeableRow, charts, modals.
+  const isGestureOwnedByChild = (target) => {
+    if (!target || !target.closest) return false;
+    if (target.closest("[data-hswipe-safe]")) return true;
+    if (target.closest("input, textarea, select, [contenteditable]")) return true;
+    return false;
+  };
   const onTouchStart = (e) => {
+    if (isGestureOwnedByChild(e.target)) { touchX.current = null; return; }
     touchX.current = e.touches[0].clientX; touchY.current = e.touches[0].clientY;
     if (!e.target.closest("input, textarea, select")) document.activeElement?.blur();
   };
@@ -4603,7 +4615,9 @@ export default function App() {
     if (touchX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchX.current;
     const dy = e.changedTouches[0].clientY - touchY.current;
-    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 55) {
+    // Tightened thresholds — require 80px+ travel with dy < 40px so accidental
+    // row/slider gestures don't cross the line. Still allows a clear tab-swipe.
+    if (Math.abs(dx) > 80 && Math.abs(dy) < 40 && Math.abs(dx) > Math.abs(dy) * 2) {
       const idx = SWIPE_VIEWS.indexOf(view);
       if (dx < 0 && idx < SWIPE_VIEWS.length - 1) setView(SWIPE_VIEWS[idx + 1]);
       if (dx > 0 && idx > 0) setView(SWIPE_VIEWS[idx - 1]);
@@ -5059,7 +5073,7 @@ export default function App() {
               {/* Category filter chips (Fix #15: reordered by usage, snap-aligned, fade into surfaceHigh) */}
               <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 2 }}>Muscle Group</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
+                <div data-hswipe-safe style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedCats.map(c => {
                     const active = exCatFilter === c.id;
                     const darkText = active && c.color && ["#D4A64E", "#E8B64C"].includes(c.color);
@@ -5073,7 +5087,7 @@ export default function App() {
               {/* Equipment filter chips */}
               <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 6, marginTop: 4 }}>Equipment</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
+                <div data-hswipe-safe style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-x", paddingBottom: 4, paddingRight: 28, scrollbarWidth: "none", msOverflowStyle: "none", scrollSnapType: "x proximity" }}>
                   {orderedEquips.map(eq => {
                     const active = exEquipFilter === eq.id;
                     return (
