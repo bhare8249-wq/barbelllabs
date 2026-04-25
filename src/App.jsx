@@ -66,6 +66,34 @@ const accent     = "#5B9BD5";   // Steel Blue
 const accentGlow = "rgba(91,155,213,0.20)";
 const haptic = (pattern = 10) => { try { navigator.vibrate(pattern); } catch (_) {} };
 
+// Fix #77: lightweight Web-Audio tone player. Off by default — opt-in via Settings → Workout Preferences.
+// Reads the toggle from window so non-React callers can stay simple. Helpers update __bl_sound below.
+let __bl_audio_ctx = null;
+const playTone = (freq = 880, ms = 120, type = "sine", vol = 0.18) => {
+  try {
+    if (!window.__bl_sound) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!__bl_audio_ctx) __bl_audio_ctx = new Ctx();
+    const ctx = __bl_audio_ctx;
+    if (ctx.state === "suspended") ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = vol;
+    osc.connect(gain).connect(ctx.destination);
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + ms / 1000);
+    osc.start(now);
+    osc.stop(now + ms / 1000);
+  } catch {}
+};
+const playDing      = () => playTone(880, 120, "sine", 0.12);
+const playComplete  = () => { playTone(660, 100, "sine", 0.15); setTimeout(() => playTone(990, 160, "sine", 0.18), 110); };
+const playRestDone  = () => { playTone(523, 100, "sine", 0.18); setTimeout(() => playTone(659, 100, "sine", 0.18), 110); setTimeout(() => playTone(784, 200, "sine", 0.20), 220); };
+
 const makeStyles = (t) => ({
   card: (extra = {}) => ({
     background: t.surfaceHigh, borderRadius: 18, padding: "18px 20px", marginBottom: 14,
@@ -150,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.32";
+const APP_VERSION = "2.4.33";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -1113,7 +1141,7 @@ function RestTimer() {
 
   useEffect(() => {
     if (!running) return;
-    if (remaining <= 0) { setRunning(false); setDone(true); haptic([0, 80, 40, 80]); cancelNotif(); return; }
+    if (remaining <= 0) { setRunning(false); setDone(true); haptic([0, 80, 40, 80]); playRestDone(); cancelNotif(); return; }
     const id = setInterval(() => setRemaining(r => r - 1), 1000);
     return () => clearInterval(id);
   }, [running, remaining]); // eslint-disable-line
@@ -1974,8 +2002,12 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric })
 
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1];
-    if (last && (last.weight || last.reps)) { window.dispatchEvent(new Event("gt-start-timer")); }
-    else { haptic(10); }
+    if (last && (last.weight || last.reps)) {
+      // Set committed — haptic confirm, sound ding (Fix #76 + #77), then start rest timer
+      haptic([0, 30, 20, 30]);
+      playDing();
+      window.dispatchEvent(new Event("gt-start-timer"));
+    } else { haptic(10); }
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
@@ -2537,7 +2569,7 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount }) {
+function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2648,6 +2680,18 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
                 })}
               </div>
             </div>
+            {/* Fix #77: Sound effects toggle */}
+            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600 }}>Sound effects</div>
+                  <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>Subtle tones on set complete, rest timer end, PR unlock.</div>
+                </div>
+                <button onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound })} style={{ background: workoutPrefs?.sound ? accent : t.surface, border: `1px solid ${workoutPrefs?.sound ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.sound ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0 }}>
+                  {workoutPrefs?.sound ? "ON" : "OFF"}
+                </button>
+              </div>
+            </div>
             {/* Fix #46: Units preference (display-only for now; full conversion is a separate task) */}
             <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
               <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 4 }}>Units</div>
@@ -2680,13 +2724,34 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
         {onExport && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Data &amp; Privacy</div>
-            <button onClick={onExport} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
-                <Icon name="download" size={16} />
-                Export Workouts (CSV)
-              </span>
-              <Icon name="chevronRight" size={14} color={t.textMuted} />
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button onClick={onExport} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                  <Icon name="download" size={16} />
+                  Export Workouts (CSV)
+                </span>
+                <Icon name="chevronRight" size={14} color={t.textMuted} />
+              </button>
+              {/* Fix #66: full JSON backup / restore */}
+              {onBackupJSON && (
+                <button onClick={onBackupJSON} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                    <Icon name="shield" size={16} />
+                    Backup data (JSON)
+                  </span>
+                  <Icon name="chevronRight" size={14} color={t.textMuted} />
+                </button>
+              )}
+              {onRestoreJSON && (
+                <button onClick={onRestoreJSON} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                    <Icon name="history" size={16} />
+                    Restore from backup
+                  </span>
+                  <Icon name="chevronRight" size={14} color={t.textMuted} />
+                </button>
+              )}
+            </div>
           </div>
         )}
         {/* Fix #60 + #63: About — Privacy / Terms links + support contact */}
@@ -4428,6 +4493,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseUser?.uid, (data.workouts || []).length]);
 
+  // Fix #77 — bridge sound pref to global flag for non-React audio callers
+  useEffect(() => {
+    try { window.__bl_sound = !!(data.workoutPrefs && data.workoutPrefs.sound); } catch {}
+  }, [data?.workoutPrefs?.sound]);
+
   // Fix #28 — first-run onboarding tour when profile.onboarded is falsy
   useEffect(() => {
     if (!firebaseUser) return;
@@ -4567,6 +4637,7 @@ export default function App() {
     const notifUpdate = computeWorkoutNotifications(data, cleaned, prev);
     save({ ...data, workouts: [cleaned, ...data.workouts], ...(notifUpdate || {}) });
     haptic([0, 60, 30, 60, 30, 120]);
+    playComplete();
     setWorkout(null); setView("home");
     setCompletedWorkout({ workout: cleaned, prevWorkouts: prev });
   };
@@ -4664,7 +4735,7 @@ export default function App() {
   const navItem = (v, icon, label) => {
     const active = view === v;
     return (
-      <button onClick={() => { if (v === "log" && !workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView(v); }}
+      <button onClick={() => { if (active) return; haptic(8); if (v === "log" && !workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView(v); }}
         style={{ flex: 1, background: "transparent", border: "none", borderTop: active ? `2px solid ${accent}` : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: active ? accent : t.textMuted, padding: "12px 0 10px", transition: "color 0.15s", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
         <div style={{ transition: "transform 0.15s", transform: active ? "scale(1.1)" : "scale(1)" }}>
           <Icon name={icon} size={21} />
@@ -5522,6 +5593,41 @@ export default function App() {
         workoutPrefs={data.workoutPrefs || {}}
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
         onDeleteAccount={() => { setShowSettings(false); setShowDeleteAccount(true); }}
+        onBackupJSON={() => {
+          // Fix #66: full local backup including profile, workouts, templates, tags, prefs.
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `barbell-labs-backup-${authedUser}-${todayISO()}.json`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          haptic([0, 30]);
+        }}
+        onRestoreJSON={() => {
+          // Fix #66: file picker → parse → confirm → save merged
+          const input = document.createElement("input");
+          input.type = "file"; input.accept = "application/json,.json";
+          input.onchange = (e) => {
+            const file = e.target.files?.[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              try {
+                const parsed = JSON.parse(ev.target.result);
+                if (typeof parsed !== "object" || parsed === null) throw new Error("not an object");
+                const ok = window.confirm(`Restore from backup? This replaces your current cloud data with the backup contents (${(parsed.workouts || []).length} workouts, ${(parsed.templates || []).length} templates). This cannot be undone.`);
+                if (!ok) return;
+                save({ ...parsed, customTags: parsed.customTags || [], templates: parsed.templates || [], workouts: parsed.workouts || [], bodyweight: parsed.bodyweight || [] });
+                haptic([0, 60, 30, 80]);
+                window.alert("Restore complete. Your data is now from the backup.");
+              } catch (err) {
+                window.alert("That file doesn't look like a valid Barbell Labs backup. (" + (err.message || "parse error") + ")");
+              }
+            };
+            reader.readAsText(file);
+          };
+          input.click();
+        }}
       />}
       {showDeleteAccount && <DeleteAccountModal
         onClose={() => setShowDeleteAccount(false)}
