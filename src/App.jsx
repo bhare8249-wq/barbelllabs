@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.42";
+const APP_VERSION = "2.4.43";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -760,6 +760,47 @@ const EX_EQUIPS = [
   { id: "other",      label: "Other" },
 ];
 const CAT_COLORS = { chest:"#E67E6B", back:"#4A9EB8", shoulders:"#D4A64E", arms:"#7FB069", legs:"#9E7ABF", core:"#D96B7A", cardio:"#E8B64C", full:"#5BB588", custom:"#888" };
+// Muscle families — when a user searches a muscle term in the picker, we look up
+// the related muscles that count as the "same family" from a training perspective.
+// E.g. Hammer Curl's anatomical primary muscle is the Brachialis, but every lifter
+// trains it on bicep day, so a "bicep" search should surface it. Same with
+// brachioradialis (Reverse Curl), Soleus/Gastrocnemius for "calf", etc.
+//
+// Lookup is by lowercased search term; both singular and plural keys are listed
+// to catch user input variations. The values are matched as whole words against
+// the FIRST entry in an exercise's muscles list (the primary-target muscle).
+const _BICEP    = ["biceps", "bicep", "brachialis", "brachioradialis", "brachii"];
+const _TRICEP   = ["triceps", "tricep"];
+const _FOREARM  = ["forearms", "forearm", "forearm flexors", "forearm extensors", "brachioradialis", "wrist"];
+const _CHEST    = ["pecs", "pec", "chest", "pectorals", "serratus"];
+const _BACK     = ["lats", "lat", "back", "rhomboids", "rhomboid", "traps", "trap", "teres", "erectors"];
+const _LAT      = ["lats", "lat"];
+const _TRAP     = ["traps", "trap"];
+const _SHOULDER = ["delts", "delt", "shoulders", "shoulder", "deltoids", "rear delts", "side delts", "front delts"];
+const _GLUTE    = ["glutes", "glute"];
+const _QUAD     = ["quads", "quad", "quadriceps"];
+const _HAMSTRING= ["hamstrings", "hamstring", "hams", "ham"];
+const _CALF     = ["calves", "calf", "soleus", "gastrocnemius"];
+const _CORE     = ["abs", "ab", "core", "abdominals", "rectus abdominis", "obliques", "oblique"];
+const _ABS      = ["abs", "ab", "abdominals", "rectus abdominis"];
+const _OBLIQUE  = ["obliques", "oblique"];
+const MUSCLE_FAMILIES = {
+  bicep: _BICEP, biceps: _BICEP,
+  tricep: _TRICEP, triceps: _TRICEP,
+  forearm: _FOREARM, forearms: _FOREARM,
+  chest: _CHEST, pec: _CHEST, pecs: _CHEST,
+  back: _BACK,
+  lat: _LAT, lats: _LAT,
+  trap: _TRAP, traps: _TRAP,
+  shoulder: _SHOULDER, shoulders: _SHOULDER, delt: _SHOULDER, delts: _SHOULDER,
+  glute: _GLUTE, glutes: _GLUTE,
+  quad: _QUAD, quads: _QUAD, quadricep: _QUAD, quadriceps: _QUAD,
+  ham: _HAMSTRING, hams: _HAMSTRING, hamstring: _HAMSTRING, hamstrings: _HAMSTRING,
+  calf: _CALF, calves: _CALF,
+  ab: _ABS, abs: _ABS,
+  core: _CORE,
+  oblique: _OBLIQUE, obliques: _OBLIQUE,
+};
 // Fix #17/#19: auto-suggest workout tags based on exercise categories
 const TAG_CAP = 5;
 function suggestTags(exercises) {
@@ -4881,10 +4922,21 @@ export default function App() {
       tier1.push({ ...s.ex, _tier: 1 });
     }
 
-    // Tier 2: primary muscle matches (whole-word + optional-s for plural/singular)
-    const escapedSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const stem = escapedSearch.replace(/s$/, "");
-    const muscleRegex = stem ? new RegExp(`\\b${stem}s?\\b`, "i") : null;
+    // Tier 2: primary muscle matches.
+    // First look up the search term in MUSCLE_FAMILIES — this captures common gym classification
+    // (e.g. "bicep" → also matches Brachialis / Brachioradialis since lifters train Hammer Curl
+    // and Reverse Curl on bicep day even though those muscles are anatomically separate).
+    // Falls back to a whole-word + optional-trailing-s regex for terms not in the family map.
+    const family = MUSCLE_FAMILIES[trimmedSearch];
+    let muscleRegex = null;
+    if (family) {
+      const alts = family.map(m => m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+      muscleRegex = new RegExp(`\\b(${alts})\\b`, "i");
+    } else {
+      const escapedSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const stem = escapedSearch.replace(/s$/, "");
+      muscleRegex = stem ? new RegExp(`\\b${stem}s?\\b`, "i") : null;
+    }
     const tier2Names = new Set();
     const tier2 = [];
     if (muscleRegex) {
