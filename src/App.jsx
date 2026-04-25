@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.36";
+const APP_VERSION = "2.4.37";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -2163,7 +2163,7 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
 }
 
 // ── Exercise Block ────────────────────────────────────────────────────
-function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric }) {
+function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, mode = "active", onFocus, queueIndex }) {
   const S = useS();
   const t = useT();
   const [coachDismissed, setCoachDismissed] = useState(false);
@@ -2177,7 +2177,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric })
     }, null);
     return (
       <button
-        onClick={() => onChange({ ...exercise, done: false })}
+        onClick={() => { onChange({ ...exercise, done: false }); onFocus?.(); }}
         style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation" }}
       >
         <span style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#5bb85b", flexShrink: 0 }}>
@@ -2192,6 +2192,25 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric })
           </div>
         </div>
         <span style={{ color: t.textMuted, transform: "rotate(180deg)", display: "flex", flexShrink: 0 }}><Icon name="chevronDown" size={16} /></span>
+      </button>
+    );
+  }
+
+  // Queued — collapsed blue pill, tap to focus and become active
+  if (mode === "queued") {
+    return (
+      <button
+        onClick={() => onFocus?.()}
+        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid ${accent}33`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation" }}
+      >
+        <span style={{ width: 28, height: 28, borderRadius: "50%", background: `${accent}1a`, border: `1px solid ${accent}55`, display: "flex", alignItems: "center", justifyContent: "center", color: accent, fontSize: 13, fontWeight: 700, flexShrink: 0, fontFamily: "'Bebas Neue', cursive" }}>
+          {queueIndex != null ? queueIndex + 1 : <Icon name="plus" size={12} />}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 0.5, color: t.text, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{exercise.name}</div>
+          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>Up next · tap to start</div>
+        </div>
+        <span style={{ color: accent, display: "flex", flexShrink: 0 }}><Icon name="chevronRight" size={16} /></span>
       </button>
     );
   }
@@ -4662,6 +4681,7 @@ export default function App() {
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showWarmup, setShowWarmup] = useState(false);
+  const [currentExerciseIdx, setCurrentExerciseIdx] = useState(null);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
@@ -4716,6 +4736,11 @@ export default function App() {
   useEffect(() => {
     try { window.__bl_sound = !!(data.workoutPrefs && data.workoutPrefs.sound); } catch {}
   }, [data?.workoutPrefs?.sound]);
+
+  // Reset focused-exercise index when workout starts or ends so the active mode auto-falls-back
+  useEffect(() => {
+    if (!workout) setCurrentExerciseIdx(null);
+  }, [workout?.startTime]);
 
   // Fix #28 — first-run onboarding tour when profile.onboarded is falsy
   useEffect(() => {
@@ -4852,7 +4877,10 @@ export default function App() {
   };
   const finishWorkout = () => {
     // Strip transient `done` flag — it's UI state for live workouts only.
-    const cleaned = { ...workout, duration: Math.round((Date.now() - workout.startTime) / 60000), exercises: workout.exercises.map(({ done, ...e }) => ({ ...e, sets: e.sets.filter(s => s.weight !== "" || s.reps !== "") })).filter(e => e.sets.length > 0) };
+    const cleanedExercises = workout.exercises.map(({ done, ...e }) => ({ ...e, sets: e.sets.filter(s => s.weight !== "" || s.reps !== "") })).filter(e => e.sets.length > 0);
+    // Auto-apply suggested tags if none set (tag editor was removed from Log; users can still edit from History)
+    const labels = (workout.labels && workout.labels.length) ? workout.labels : suggestTags(cleanedExercises);
+    const cleaned = { ...workout, labels, label: labels[0] || null, duration: Math.round((Date.now() - workout.startTime) / 60000), exercises: cleanedExercises };
     const prev = data.workouts;
     const notifUpdate = computeWorkoutNotifications(data, cleaned, prev);
     save({ ...data, workouts: [cleaned, ...data.workouts], ...(notifUpdate || {}) });
@@ -5074,7 +5102,7 @@ export default function App() {
             </TopActions>
           </div>
 
-          {workout && <LogTagEditor labels={workout.labels} customTags={data.customTags} onManage={() => setShowManageTags(true)} onChange={next => setWorkout(w => ({ ...w, labels: next }))} />}
+          {/* Tag editor moved out of Log — auto-suggested on Finish, editable from History */}
 
           <RestTimer />
 
@@ -5127,17 +5155,35 @@ export default function App() {
             </button>
           )}
 
-          {/* Sort active first, done last — preserves insertion order within each group */}
-          {workout && workout.exercises
-            .map((ex, i) => ({ ex, i }))
-            .sort((a, b) => (a.ex.done ? 1 : 0) - (b.ex.done ? 1 : 0))
-            .map(({ ex, i }) => (
-              <ExerciseBlock key={i} exercise={ex} workouts={data.workouts}
-                effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
-                onChange={updated => { const exercises = [...workout.exercises]; exercises[i] = updated; setWorkout({ ...workout, exercises }); }}
-                onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
-              />
-            ))}
+          {/* Focus mode: only one exercise expanded (active); others queued (collapsed) or done.
+              Sort: active → queued (in original order) → done (in original order). */}
+          {workout && (() => {
+            const activeIdx = (currentExerciseIdx != null && workout.exercises[currentExerciseIdx] && !workout.exercises[currentExerciseIdx].done)
+              ? currentExerciseIdx
+              : workout.exercises.findIndex(e => !e.done);
+            const ordered = workout.exercises.map((ex, i) => ({ ex, i }))
+              .sort((a, b) => {
+                const ra = a.ex.done ? 2 : (a.i === activeIdx ? 0 : 1);
+                const rb = b.ex.done ? 2 : (b.i === activeIdx ? 0 : 1);
+                return ra - rb;
+              });
+            // Compute queued ordering for the badge number
+            const queuedIndices = workout.exercises.map((ex, i) => (!ex.done && i !== activeIdx) ? i : -1).filter(i => i >= 0);
+            return ordered.map(({ ex, i }) => {
+              const mode = ex.done ? "done" : (i === activeIdx ? "active" : "queued");
+              const queueIndex = mode === "queued" ? queuedIndices.indexOf(i) : null;
+              return (
+                <ExerciseBlock key={i} exercise={ex} workouts={data.workouts}
+                  mode={mode}
+                  queueIndex={queueIndex}
+                  onFocus={() => setCurrentExerciseIdx(i)}
+                  effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
+                  onChange={updated => { const exercises = [...workout.exercises]; exercises[i] = updated; setWorkout({ ...workout, exercises }); if (updated.done && i === activeIdx) setCurrentExerciseIdx(null); }}
+                  onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
+                />
+              );
+            });
+          })()}
 
           {showExPicker ? (
             <div style={S.card()}>
