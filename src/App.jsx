@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.37";
+const APP_VERSION = "2.4.38";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -5107,7 +5107,7 @@ export default function App() {
           <RestTimer />
 
           {/* Quick-start section — only shown when workout is empty */}
-          {workout && workout.exercises.length === 0 && (
+          {workout && workout.exercises.length === 0 && !showExPicker && (
             <div style={{ marginBottom: 18 }}>
               {/* Repeat last session */}
               {data.workouts.length > 0 && (
@@ -5148,16 +5148,17 @@ export default function App() {
             </div>
           )}
 
-          {/* Save as Template — shown when workout has exercises */}
-          {workout && workout.exercises.length > 0 && (
+          {/* Save as Template — shown when workout has exercises and picker isn't focused */}
+          {workout && workout.exercises.length > 0 && !showExPicker && (
             <button onClick={() => setShowSaveTemplate(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 12, color: t.textMuted, padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 14, touchAction: "manipulation" }}>
               ＋ Save as Template
             </button>
           )}
 
           {/* Focus mode: only one exercise expanded (active); others queued (collapsed) or done.
-              Sort: active → queued (in original order) → done (in original order). */}
-          {workout && (() => {
+              Sort: active → queued (in original order) → done (in original order).
+              Hidden when picker is open so the screen stays focused on adding the next exercise. */}
+          {workout && !showExPicker && (() => {
             const activeIdx = (currentExerciseIdx != null && workout.exercises[currentExerciseIdx] && !workout.exercises[currentExerciseIdx].done)
               ? currentExerciseIdx
               : workout.exercises.findIndex(e => !e.done);
@@ -5237,33 +5238,12 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <>
-              {(() => {
-                const freq = {};
-                (data.workouts || []).slice(0, 10).forEach(w => w.exercises.forEach(ex => { freq[ex.name] = (freq[ex.name] || 0) + 1; }));
-                const already = new Set((workout?.exercises || []).map(e => e.name));
-                const recent = Object.entries(freq).filter(([n]) => !already.has(n)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
-                if (recent.length === 0) return null;
-                return (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 6 }}>Recent</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {recent.map(name => (
-                        <button key={name} onClick={() => addExercise(name)} style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 20, padding: "8px 13px", fontSize: 12, color: t.textSub, cursor: "pointer", touchAction: "manipulation", fontWeight: 600, whiteSpace: "nowrap", minHeight: 36 }}>
-                          + {name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-              <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
-                <Icon name="plus" size={15} /> Add Exercise
-              </button>
-            </>
+            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
+              <Icon name="plus" size={15} /> Add Exercise
+            </button>
           )}
-          {/* Finish Workout — visually emphasized once every exercise is marked Done */}
-          {workout && workout.exercises.length > 0 && (() => {
+          {/* Finish Workout — visually emphasized once every exercise is marked Done. Hidden during picker. */}
+          {workout && workout.exercises.length > 0 && !showExPicker && (() => {
             const allDone = workout.exercises.every(e => e.done);
             return (
               <>
