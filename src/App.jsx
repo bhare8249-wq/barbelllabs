@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.41";
+const APP_VERSION = "2.4.42";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -4830,41 +4830,80 @@ export default function App() {
     ...GYM_BIBLE,
     ...customExNames.map(name => ({ name, cat: "custom", equip: "other", level: "beginner", muscles: "" })),
   ];
-  // Picker search (name-only):
-  //  - Search matches NAMES only. Muscle-based discovery is the job of the Muscle Group filter pills,
-  //    equipment-based discovery is the job of the Equipment pills. So typing "bicep" returns only
-  //    exercises with "bicep" in the name, not every exercise that works the bicep secondarily.
-  //  - Filter pills stay active during search and intersect with the query.
-  //  - Ranking: exact > name-starts-with > word-in-name-starts-with > contains.
-  //  - Dedupe by name at the end (GYM_BIBLE intentionally lists some exercises under multiple
-  //    categories — e.g. Dumbbell Pullover under chest+back — but the picker should show one row).
+  // Picker search (two-tier: name primary + primary-muscle secondary):
+  //  - Tier 1: exercises whose NAME matches the query (ranked: exact > startsWith > word-startsWith > contains).
+  //  - Tier 2 (below Tier 1, with a divider): exercises whose PRIMARY muscle matches the query.
+  //    Primary muscle = first entry in the comma-separated muscles list.
+  //    Examples (works generically for any muscle term, not just bicep):
+  //      - "bicep"  → surfaces EZ-Bar Curl ("Biceps, Brachialis"), Concentration Curl ("Biceps Peak").
+  //                   Excludes Chin-Up ("Lats, Biceps" — primary is Lats) and Hammer Curl ("Brachialis"
+  //                   — primary is Brachialis).
+  //      - "tricep" → surfaces Skullcrusher, Tricep Pushdown, etc. Excludes Bench Press (Tricep is secondary).
+  //      - "glute"  → surfaces Hip Thrust, Glute Bridge. Excludes Back Squat (Quads are primary).
+  //      - "lat"    → surfaces Lat Pulldown, Pullover variants where Lats is primary.
+  //                   Whole-word matching prevents "lat" matching "Lateral Delts".
+  //  - Whole-word + optional-trailing-s so "bicep"/"biceps", "lat"/"lats", "quad"/"quads" all work.
+  //  - Pill filters always intersect with both tiers.
+  //  - Dedupe by name within and across tiers.
   const trimmedSearch = exSearch.trim().toLowerCase();
   const filtered = (() => {
-    let pool = allPickerExercises.filter(ex => {
+    const pool = allPickerExercises.filter(ex => {
       if (exCatFilter !== "all" && ex.cat !== exCatFilter) return false;
       if (exEquipFilter !== "all" && ex.equip !== exEquipFilter) return false;
       return true;
     });
-    if (trimmedSearch) {
-      const scored = pool.map(ex => {
-        const name = (ex.name || "").toLowerCase();
-        let score = -1;
-        if (name === trimmedSearch) score = 0;
-        else if (name.startsWith(trimmedSearch)) score = 1;
-        else if (name.split(/\s+/).some(w => w.startsWith(trimmedSearch))) score = 2;
-        else if (name.includes(trimmedSearch)) score = 3;
-        return { ex, score };
-      }).filter(s => s.score >= 0);
-      scored.sort((a, b) => a.score - b.score || a.ex.name.localeCompare(b.ex.name));
-      pool = scored.map(s => s.ex);
+
+    if (!trimmedSearch) {
+      const seen = new Set();
+      return pool.filter(ex => {
+        if (seen.has(ex.name)) return false;
+        seen.add(ex.name);
+        return true;
+      }).map(ex => ({ ...ex, _tier: 1 }));
     }
-    const seen = new Set();
-    return pool.filter(ex => {
-      if (seen.has(ex.name)) return false;
-      seen.add(ex.name);
-      return true;
-    });
+
+    // Tier 1: name matches
+    const nameScored = pool.map(ex => {
+      const name = (ex.name || "").toLowerCase();
+      let score = -1;
+      if (name === trimmedSearch) score = 0;
+      else if (name.startsWith(trimmedSearch)) score = 1;
+      else if (name.split(/\s+/).some(w => w.startsWith(trimmedSearch))) score = 2;
+      else if (name.includes(trimmedSearch)) score = 3;
+      return { ex, score };
+    }).filter(s => s.score >= 0);
+    nameScored.sort((a, b) => a.score - b.score || a.ex.name.localeCompare(b.ex.name));
+    const tier1Names = new Set();
+    const tier1 = [];
+    for (const s of nameScored) {
+      if (tier1Names.has(s.ex.name)) continue;
+      tier1Names.add(s.ex.name);
+      tier1.push({ ...s.ex, _tier: 1 });
+    }
+
+    // Tier 2: primary muscle matches (whole-word + optional-s for plural/singular)
+    const escapedSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const stem = escapedSearch.replace(/s$/, "");
+    const muscleRegex = stem ? new RegExp(`\\b${stem}s?\\b`, "i") : null;
+    const tier2Names = new Set();
+    const tier2 = [];
+    if (muscleRegex) {
+      for (const ex of pool) {
+        if (tier1Names.has(ex.name) || tier2Names.has(ex.name)) continue;
+        const firstMuscle = (ex.muscles || "").split(",")[0].trim();
+        if (!firstMuscle) continue;
+        if (muscleRegex.test(firstMuscle)) {
+          tier2Names.add(ex.name);
+          tier2.push({ ...ex, _tier: 2 });
+        }
+      }
+      tier2.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return [...tier1, ...tier2];
   })();
+  const tier1Count = filtered.filter(ex => ex._tier === 1).length;
+  const tier2Count = filtered.length - tier1Count;
   const hasActiveFilters = exCatFilter !== "all" || exEquipFilter !== "all";
   // Fix #15: sort filter pills by this user's usage frequency ("All" always first)
   const orderedCats = (() => {
@@ -5292,10 +5331,15 @@ export default function App() {
                 <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
-              {/* Match counter — search matches names only; filters remain active */}
+              {/* Match counter — Tier 1 (name match) and Tier 2 (primary-muscle match) shown separately when both have results */}
               {trimmedSearch && (
                 <div style={{ fontSize: 11, color: filtered.length === 0 ? t.warning || "#E8B64C" : t.textMuted, marginBottom: 8, marginTop: -4, lineHeight: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span>{filtered.length} {filtered.length === 1 ? "match" : "matches"}{hasActiveFilters ? " in current filters" : ""}</span>
+                  <span>
+                    {tier2Count > 0
+                      ? `${tier1Count} by name · ${tier2Count} by muscle`
+                      : `${tier1Count} ${tier1Count === 1 ? "match" : "matches"}`}
+                    {hasActiveFilters && filtered.length > 0 ? " in current filters" : ""}
+                  </span>
                   {filtered.length === 0 && hasActiveFilters && (
                     <button onClick={() => { setExCatFilter("all"); setExEquipFilter("all"); }} style={{ background: "transparent", border: "none", color: accent, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: "2px 0", textDecoration: "underline" }}>Clear filters</button>
                   )}
@@ -5330,13 +5374,28 @@ export default function App() {
               </div>
               {/* Results list */}
               <div style={{ maxHeight: 240, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
-                {filtered.map(ex => (
-                  <button key={ex.name} onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(ex.name); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "none", color: t.text, textAlign: "left", padding: "10px 8px", cursor: "pointer", fontSize: 14, borderBottom: `1px solid ${t.border}`, minHeight: 44, touchAction: "manipulation" }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: CAT_COLORS[ex.cat] || "#888", flexShrink: 0 }} />
-                    <span style={{ flex: 1, lineHeight: 1.3 }}>{ex.name}</span>
-                    {ex.cat !== "custom" && <span style={{ fontSize: 10, color: t.textMuted, background: t.cardBg || t.surface2 || "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: 4, flexShrink: 0, textTransform: "capitalize" }}>{ex.equip}</span>}
-                  </button>
-                ))}
+                {(() => {
+                  const rows = [];
+                  let lastTier = null;
+                  for (const ex of filtered) {
+                    if (ex._tier === 2 && lastTier !== 2) {
+                      rows.push(
+                        <div key="__tier2-divider" style={{ fontSize: 10, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginTop: 8, marginBottom: 2, padding: "8px 8px 4px", borderTop: `1px solid ${t.border}` }}>
+                          Targets {trimmedSearch}
+                        </div>
+                      );
+                    }
+                    rows.push(
+                      <button key={ex.name} onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(ex.name); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "none", color: t.text, textAlign: "left", padding: "10px 8px", cursor: "pointer", fontSize: 14, borderBottom: `1px solid ${t.border}`, minHeight: 44, touchAction: "manipulation" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: CAT_COLORS[ex.cat] || "#888", flexShrink: 0 }} />
+                        <span style={{ flex: 1, lineHeight: 1.3 }}>{ex.name}</span>
+                        {ex.cat !== "custom" && <span style={{ fontSize: 10, color: t.textMuted, background: t.cardBg || t.surface2 || "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: 4, flexShrink: 0, textTransform: "capitalize" }}>{ex.equip}</span>}
+                      </button>
+                    );
+                    lastTier = ex._tier;
+                  }
+                  return rows;
+                })()}
                 {filtered.length === 0 && !exSearch && <div style={{ padding: "20px 8px", color: t.textMuted, fontSize: 13, textAlign: "center" }}>No exercises match these filters.</div>}
                 {exSearch && !filtered.find(ex => ex.name.toLowerCase() === exSearch.toLowerCase()) && (
                   <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); addExercise(exSearch); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "none", color: accent, textAlign: "left", padding: "12px 8px", cursor: "pointer", fontSize: 14, fontWeight: 600, minHeight: 44, touchAction: "manipulation" }}>
