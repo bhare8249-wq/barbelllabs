@@ -178,7 +178,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.35";
+const APP_VERSION = "2.4.37";
 const BUILD_DATE  = "2026-04-24";
 
 function useStorage(uid) {
@@ -1115,6 +1115,7 @@ function RestTimer() {
   const [customMin, setCustomMin] = useState("");
   const [customSec, setCustomSec] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+  const [expanded, setExpanded] = useState(false); // compact by default
   const notifTimeout = useRef(null);
 
   const scheduleNotif = (secs) => {
@@ -1174,12 +1175,45 @@ function RestTimer() {
 
   const isCustomActive = !PRESETS.includes(seconds);
 
+  // Compact mode — slim row with countdown + start/pause + expand chevron
+  if (!expanded) {
+    const display = remaining != null ? fmt(remaining) : fmt(seconds);
+    const dotColor = done ? "#5bb85b" : running ? accent : t.textMuted;
+    return (
+      <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, animation: running ? "bl-card-in 1s ease-in-out infinite alternate" : "none" }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: t.textMuted, letterSpacing: 0.6, textTransform: "uppercase" }}>Rest</span>
+        <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: done ? "#5bb85b" : (running ? t.text : t.textSub), lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+          {done ? "✓" : display}
+        </span>
+        {done && <span style={{ fontSize: 11, color: "#5bb85b", fontWeight: 600, flex: 1 }}>Rest complete</span>}
+        {!done && <div style={{ flex: 1 }} />}
+        {!running && !done && (
+          <button onClick={start} style={{ background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Start</button>
+        )}
+        {running && (
+          <button onClick={() => setRunning(false)} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
+        )}
+        {done && (
+          <button onClick={stop} style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
+        )}
+        <button onClick={() => setExpanded(true)} aria-label="Expand rest timer" style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon name="chevronDown" size={14} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Icon name="timer" size={14} />
         <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1, color: t.text }}>REST TIMER</span>
-        {done && <span style={{ fontSize: 12, color: "#5bb85b", fontWeight: 700, marginLeft: "auto" }}>✓ Rest complete!</span>}
+        {done && <span style={{ fontSize: 12, color: "#5bb85b", fontWeight: 700 }}>✓ Rest complete!</span>}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setExpanded(false)} aria-label="Collapse rest timer" style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(180deg)" }}>
+          <Icon name="chevronDown" size={14} />
+        </button>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {/* Ring */}
@@ -2129,10 +2163,57 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
 }
 
 // ── Exercise Block ────────────────────────────────────────────────────
-function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric }) {
+function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, mode = "active", onFocus, queueIndex }) {
   const S = useS();
   const t = useT();
   const [coachDismissed, setCoachDismissed] = useState(false);
+
+  // "Done Exercise" — collapsed pill view when exercise.done is truthy
+  if (exercise.done) {
+    const validSets = exercise.sets.filter(s => s.weight && s.reps);
+    const topSet = validSets.reduce((best, s) => {
+      if (!best) return s;
+      return (parseFloat(s.weight) || 0) > (parseFloat(best.weight) || 0) ? s : best;
+    }, null);
+    return (
+      <button
+        onClick={() => { onChange({ ...exercise, done: false }); onFocus?.(); }}
+        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation" }}
+      >
+        <span style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#5bb85b", flexShrink: 0 }}>
+          <Icon name="check" size={14} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 0.5, color: t.text, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{exercise.name}</div>
+          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>
+            {validSets.length === 0
+              ? "No sets logged · tap to edit"
+              : <>{validSets.length} set{validSets.length !== 1 ? "s" : ""}{topSet ? ` · top ${topSet.weight} × ${topSet.reps}` : ""}{exercise.note ? " · 📝" : ""}</>}
+          </div>
+        </div>
+        <span style={{ color: t.textMuted, transform: "rotate(180deg)", display: "flex", flexShrink: 0 }}><Icon name="chevronDown" size={16} /></span>
+      </button>
+    );
+  }
+
+  // Queued — collapsed blue pill, tap to focus and become active
+  if (mode === "queued") {
+    return (
+      <button
+        onClick={() => onFocus?.()}
+        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid ${accent}33`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation" }}
+      >
+        <span style={{ width: 28, height: 28, borderRadius: "50%", background: `${accent}1a`, border: `1px solid ${accent}55`, display: "flex", alignItems: "center", justifyContent: "center", color: accent, fontSize: 13, fontWeight: 700, flexShrink: 0, fontFamily: "'Bebas Neue', cursive" }}>
+          {queueIndex != null ? queueIndex + 1 : <Icon name="plus" size={12} />}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 0.5, color: t.text, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{exercise.name}</div>
+          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 3 }}>Up next · tap to start</div>
+        </div>
+        <span style={{ color: accent, display: "flex", flexShrink: 0 }}><Icon name="chevronRight" size={16} /></span>
+      </button>
+    );
+  }
 
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1];
@@ -2146,6 +2227,11 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric })
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   const removeSet = (i) => onChange({ ...exercise, sets: exercise.sets.filter((_, j) => j !== i) });
+  const markDone = () => {
+    haptic([0, 30, 30, 80]);
+    playDing();
+    onChange({ ...exercise, done: true });
+  };
 
   const coach = coachFor(exercise.name, workouts);
 
@@ -2218,6 +2304,10 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric })
         style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "12px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }}
         onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
       />
+      {/* Mark Done — collapses card and lets user move to next exercise */}
+      <button onClick={markDone} style={{ width: "100%", marginTop: 12, background: "linear-gradient(135deg, #5bb85b, #3a8a3a)", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, touchAction: "manipulation" }}>
+        <Icon name="check" size={16} /> Done with this exercise
+      </button>
     </div>
   );
 }
@@ -4591,6 +4681,7 @@ export default function App() {
   const [showRangePicker, setShowRangePicker] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showWarmup, setShowWarmup] = useState(false);
+  const [currentExerciseIdx, setCurrentExerciseIdx] = useState(null);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
@@ -4645,6 +4736,11 @@ export default function App() {
   useEffect(() => {
     try { window.__bl_sound = !!(data.workoutPrefs && data.workoutPrefs.sound); } catch {}
   }, [data?.workoutPrefs?.sound]);
+
+  // Reset focused-exercise index when workout starts or ends so the active mode auto-falls-back
+  useEffect(() => {
+    if (!workout) setCurrentExerciseIdx(null);
+  }, [workout?.startTime]);
 
   // Fix #28 — first-run onboarding tour when profile.onboarded is falsy
   useEffect(() => {
@@ -4780,7 +4876,11 @@ export default function App() {
     setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all");
   };
   const finishWorkout = () => {
-    const cleaned = { ...workout, duration: Math.round((Date.now() - workout.startTime) / 60000), exercises: workout.exercises.map(e => ({ ...e, sets: e.sets.filter(s => s.weight !== "" || s.reps !== "") })).filter(e => e.sets.length > 0) };
+    // Strip transient `done` flag — it's UI state for live workouts only.
+    const cleanedExercises = workout.exercises.map(({ done, ...e }) => ({ ...e, sets: e.sets.filter(s => s.weight !== "" || s.reps !== "") })).filter(e => e.sets.length > 0);
+    // Auto-apply suggested tags if none set (tag editor was removed from Log; users can still edit from History)
+    const labels = (workout.labels && workout.labels.length) ? workout.labels : suggestTags(cleanedExercises);
+    const cleaned = { ...workout, labels, label: labels[0] || null, duration: Math.round((Date.now() - workout.startTime) / 60000), exercises: cleanedExercises };
     const prev = data.workouts;
     const notifUpdate = computeWorkoutNotifications(data, cleaned, prev);
     save({ ...data, workouts: [cleaned, ...data.workouts], ...(notifUpdate || {}) });
@@ -5002,7 +5102,7 @@ export default function App() {
             </TopActions>
           </div>
 
-          {workout && <LogTagEditor labels={workout.labels} customTags={data.customTags} onManage={() => setShowManageTags(true)} onChange={next => setWorkout(w => ({ ...w, labels: next }))} />}
+          {/* Tag editor moved out of Log — auto-suggested on Finish, editable from History */}
 
           <RestTimer />
 
@@ -5055,13 +5155,35 @@ export default function App() {
             </button>
           )}
 
-          {workout && workout.exercises.map((ex, i) => (
-            <ExerciseBlock key={i} exercise={ex} workouts={data.workouts}
-              effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
-              onChange={updated => { const exercises = [...workout.exercises]; exercises[i] = updated; setWorkout({ ...workout, exercises }); }}
-              onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
-            />
-          ))}
+          {/* Focus mode: only one exercise expanded (active); others queued (collapsed) or done.
+              Sort: active → queued (in original order) → done (in original order). */}
+          {workout && (() => {
+            const activeIdx = (currentExerciseIdx != null && workout.exercises[currentExerciseIdx] && !workout.exercises[currentExerciseIdx].done)
+              ? currentExerciseIdx
+              : workout.exercises.findIndex(e => !e.done);
+            const ordered = workout.exercises.map((ex, i) => ({ ex, i }))
+              .sort((a, b) => {
+                const ra = a.ex.done ? 2 : (a.i === activeIdx ? 0 : 1);
+                const rb = b.ex.done ? 2 : (b.i === activeIdx ? 0 : 1);
+                return ra - rb;
+              });
+            // Compute queued ordering for the badge number
+            const queuedIndices = workout.exercises.map((ex, i) => (!ex.done && i !== activeIdx) ? i : -1).filter(i => i >= 0);
+            return ordered.map(({ ex, i }) => {
+              const mode = ex.done ? "done" : (i === activeIdx ? "active" : "queued");
+              const queueIndex = mode === "queued" ? queuedIndices.indexOf(i) : null;
+              return (
+                <ExerciseBlock key={i} exercise={ex} workouts={data.workouts}
+                  mode={mode}
+                  queueIndex={queueIndex}
+                  onFocus={() => setCurrentExerciseIdx(i)}
+                  effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
+                  onChange={updated => { const exercises = [...workout.exercises]; exercises[i] = updated; setWorkout({ ...workout, exercises }); if (updated.done && i === activeIdx) setCurrentExerciseIdx(null); }}
+                  onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
+                />
+              );
+            });
+          })()}
 
           {showExPicker ? (
             <div style={S.card()}>
@@ -5140,7 +5262,21 @@ export default function App() {
               </button>
             </>
           )}
-          {workout && workout.exercises.length > 0 && <button onClick={finishWorkout} style={{ ...S.solidBtn(), width: "100%", padding: 14, borderRadius: 12, fontSize: 18, marginTop: 4 }}>Finish Workout</button>}
+          {/* Finish Workout — visually emphasized once every exercise is marked Done */}
+          {workout && workout.exercises.length > 0 && (() => {
+            const allDone = workout.exercises.every(e => e.done);
+            return (
+              <>
+                {allDone && (
+                  <div style={{ background: "rgba(91,184,91,0.10)", border: "1px solid rgba(91,184,91,0.4)", borderRadius: 12, padding: "10px 14px", marginTop: 8, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>🎉</span>
+                    <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 600, lineHeight: 1.4 }}>All exercises done — wrap up to save your session.</div>
+                  </div>
+                )}
+                <button onClick={finishWorkout} style={{ ...S.solidBtn(), width: "100%", padding: allDone ? 18 : 14, borderRadius: 12, fontSize: allDone ? 22 : 18, marginTop: 4, boxShadow: allDone ? `0 8px 32px ${accentGlow}` : "none", transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s" }}>Finish Workout</button>
+              </>
+            );
+          })()}
           {(!workout || workout.exercises.length === 0) && !showExPicker && (
             <div style={{ textAlign: "center", color: t.textMuted, padding: "28px 0 0", fontSize: 14 }}>
               <div>Add exercises or load a previous workout</div>
