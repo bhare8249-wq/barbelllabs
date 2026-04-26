@@ -179,7 +179,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.47";
+const APP_VERSION = "2.4.48";
 const BUILD_DATE  = "2026-04-25";
 
 function useStorage(uid) {
@@ -961,15 +961,43 @@ function HelpBtn({ page, onOpen }) {
 function RestTimer() {
   const t = useT(); const S = useS();
   const PRESETS = [30, 60, 90, 120, 180];
-  const [seconds, setSeconds] = useState(90);
-  const [remaining, setRemaining] = useState(null);
-  const [running, setRunning] = useState(false);
+  // Fix #80: timestamp-based timer. endsAt is the wall-clock time the timer should fire.
+  // We derive `remaining` from (endsAt - Date.now()) on every render — this is robust against
+  // background-tab throttling that breaks setInterval-based countdowns. Persisted to
+  // localStorage so the timer survives navigation, refresh, and screen lock.
+  const LS_KEY = "barbell.restTimer.v1";
+  const loadPersisted = () => {
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+  };
+  const persisted = loadPersisted();
+  const [seconds, setSeconds] = useState(persisted.seconds || 90);
+  const [endsAt, setEndsAt] = useState(persisted.endsAt && persisted.endsAt > Date.now() ? persisted.endsAt : null);
+  // pausedRemaining is the seconds-left-on-pause; null when timer is running or fresh.
+  const [pausedRemaining, setPausedRemaining] = useState(persisted.pausedRemaining ?? null);
   const [done, setDone] = useState(false);
   const [customMin, setCustomMin] = useState("");
   const [customSec, setCustomSec] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   const [expanded, setExpanded] = useState(false); // compact by default
+  const [, forceTick] = useState(0); // forces re-render every 250ms while running so the display updates
   const notifTimeout = useRef(null);
+  const doneFiredRef = useRef(false); // ensures the "rest done" haptic/sound fires exactly once per timer
+
+  const running = endsAt !== null;
+  const remaining = running
+    ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
+    : (pausedRemaining ?? seconds);
+
+  // Persist whenever the relevant state changes
+  useEffect(() => {
+    try {
+      if (endsAt || pausedRemaining != null || seconds !== 90) {
+        localStorage.setItem(LS_KEY, JSON.stringify({ seconds, endsAt, pausedRemaining }));
+      } else {
+        localStorage.removeItem(LS_KEY);
+      }
+    } catch {}
+  }, [seconds, endsAt, pausedRemaining]);
 
   const scheduleNotif = (secs) => {
     if (!("Notification" in window)) return;
@@ -993,16 +1021,47 @@ function RestTimer() {
     if (notifTimeout.current) { clearTimeout(notifTimeout.current); notifTimeout.current = null; }
   };
 
+  // Tick loop: force re-render every 250ms while running so remaining updates smoothly.
+  // setInterval throttles in background but that's fine — when we come back to foreground,
+  // the remaining recalculation from endsAt handles the catch-up.
   useEffect(() => {
     if (!running) return;
-    if (remaining <= 0) { setRunning(false); setDone(true); haptic([0, 80, 40, 80]); playRestDone(); cancelNotif(); return; }
-    const id = setInterval(() => setRemaining(r => r - 1), 1000);
+    const id = setInterval(() => forceTick(n => n + 1), 250);
     return () => clearInterval(id);
-  }, [running, remaining]); // eslint-disable-line
+  }, [running]);
 
+  // Done detection: when remaining hits 0 while running, fire the "rest complete" sequence
+  // once (idempotent via doneFiredRef). Also catches the case where the user returns to the
+  // app after backgrounding past the endsAt — the next render computes remaining=0 and fires.
+  useEffect(() => {
+    if (!running) { doneFiredRef.current = false; return; }
+    if (remaining <= 0 && !doneFiredRef.current) {
+      doneFiredRef.current = true;
+      setEndsAt(null);
+      setDone(true);
+      haptic([0, 80, 40, 80]);
+      playRestDone();
+      cancelNotif();
+    }
+  }, [running, remaining]);
+
+  // Visibility change: when the user returns to the app, force a re-render so we re-evaluate
+  // remaining against current Date.now() and fire the done sequence if we crossed the line
+  // while the tab was hidden.
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden) forceTick(n => n + 1); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  // External "gt-start-timer" event support (used by per-set buttons). Always starts fresh
+  // from the current preset duration.
   useEffect(() => {
     const handler = () => {
-      setRemaining(seconds); setRunning(true); setDone(false);
+      setEndsAt(Date.now() + seconds * 1000);
+      setPausedRemaining(null);
+      setDone(false);
+      doneFiredRef.current = false;
       haptic(10); scheduleNotif(seconds);
     };
     window.addEventListener("gt-start-timer", handler);
@@ -1014,38 +1073,57 @@ function RestTimer() {
     const s = parseInt(customSec) || 0;
     const total = m * 60 + s;
     if (total > 0 && total <= 3600) {
-      setSeconds(total); setRemaining(null); setRunning(false); setDone(false);
+      setSeconds(total); setEndsAt(null); setPausedRemaining(null); setDone(false);
       setShowCustom(false);
     }
   };
 
-  const setPreset = (p) => { setSeconds(p); setRemaining(null); setRunning(false); setDone(false); setShowCustom(false); };
-  const start = () => { setRemaining(seconds); setRunning(true); setDone(false); haptic(10); scheduleNotif(seconds); };
-  const stop  = () => { setRunning(false); setRemaining(null); setDone(false); cancelNotif(); };
-  const fmt   = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  const progress = remaining != null ? remaining / seconds : 1;
+  const setPreset = (p) => { setSeconds(p); setEndsAt(null); setPausedRemaining(null); setDone(false); setShowCustom(false); };
+  // Start a fresh timer (used by Start button when nothing is paused).
+  const start  = () => {
+    setEndsAt(Date.now() + seconds * 1000); setPausedRemaining(null); setDone(false);
+    doneFiredRef.current = false;
+    haptic(10); scheduleNotif(seconds);
+  };
+  // Resume from pausedRemaining (true continuation, not a reset).
+  const resume = () => {
+    if (pausedRemaining == null) { start(); return; }
+    setEndsAt(Date.now() + pausedRemaining * 1000); setPausedRemaining(null); setDone(false);
+    doneFiredRef.current = false;
+    haptic(10); scheduleNotif(pausedRemaining);
+  };
+  const pause  = () => {
+    if (!running) return;
+    const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+    setPausedRemaining(left);
+    setEndsAt(null);
+    cancelNotif();
+  };
+  const stop   = () => { setEndsAt(null); setPausedRemaining(null); setDone(false); doneFiredRef.current = false; cancelNotif(); };
+  const fmt    = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const progress = (running || pausedRemaining != null) ? remaining / seconds : 1;
   const R = 34, circ = 2 * Math.PI * R;
 
   const isCustomActive = !PRESETS.includes(seconds);
 
-  // Compact mode — slim row with countdown + start/pause + expand chevron
+  // Compact mode — slim row with countdown + start/pause/resume + expand chevron
   if (!expanded) {
-    const display = remaining != null ? fmt(remaining) : fmt(seconds);
     const dotColor = done ? "#5bb85b" : running ? accent : t.textMuted;
+    const isPaused = pausedRemaining != null;
     return (
       <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, animation: running ? "bl-card-in 1s ease-in-out infinite alternate" : "none" }} />
         <span style={{ fontSize: 11, fontWeight: 700, color: t.textMuted, letterSpacing: 0.6, textTransform: "uppercase" }}>Rest</span>
         <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: done ? "#5bb85b" : (running ? t.text : t.textSub), lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-          {done ? "✓" : display}
+          {done ? "✓" : fmt(remaining)}
         </span>
         {done && <span style={{ fontSize: 11, color: "#5bb85b", fontWeight: 600, flex: 1 }}>Rest complete</span>}
         {!done && <div style={{ flex: 1 }} />}
         {!running && !done && (
-          <button onClick={start} style={{ background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Start</button>
+          <button onClick={isPaused ? resume : start} style={{ background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>{isPaused ? "Resume" : "Start"}</button>
         )}
         {running && (
-          <button onClick={() => setRunning(false)} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
+          <button onClick={pause} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
         )}
         {done && (
           <button onClick={stop} style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
@@ -1081,7 +1159,7 @@ function RestTimer() {
               style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }} />
             <text x="43" y="49" textAnchor="middle" fontSize="17" fontWeight="700"
               fill={done ? "#5bb85b" : t.text} fontFamily="'Bebas Neue', cursive">
-              {remaining != null ? fmt(remaining) : fmt(seconds)}
+              {fmt(remaining)}
             </text>
           </svg>
         </div>
@@ -1131,8 +1209,8 @@ function RestTimer() {
           {/* Controls */}
           <div style={{ display: "flex", gap: 8 }}>
             {!running
-              ? <button onClick={start} style={{ ...S.solidBtn(), flex: 1, padding: "11px 0", fontSize: 14, borderRadius: 10, minHeight: 42 }}>{remaining != null ? "Resume" : "Start"}</button>
-              : <button onClick={() => setRunning(false)} style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.border}`, color: t.text, borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 42, touchAction: "manipulation" }}>Pause</button>
+              ? <button onClick={pausedRemaining != null ? resume : start} style={{ ...S.solidBtn(), flex: 1, padding: "11px 0", fontSize: 14, borderRadius: 10, minHeight: 42 }}>{pausedRemaining != null ? "Resume" : "Start"}</button>
+              : <button onClick={pause} style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.border}`, color: t.text, borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 42, touchAction: "manipulation" }}>Pause</button>
             }
             <button onClick={stop} style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 10, padding: "11px 16px", fontSize: 14, cursor: "pointer", minHeight: 42, touchAction: "manipulation" }}>Reset</button>
           </div>
