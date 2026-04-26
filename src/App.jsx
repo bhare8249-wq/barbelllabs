@@ -185,7 +185,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.49";
+const APP_VERSION = "2.4.50";
 const BUILD_DATE  = "2026-04-25";
 
 function useStorage(uid) {
@@ -3473,6 +3473,45 @@ function withdrawConsent({ data, save }) {
   }
 }
 
+// ── Fix #105: Reusable destructive-action UI ──────────────────────────
+// Hybrid pattern:
+//  - Empty card / low-stakes action → undo toast only (no friction).
+//  - Card with logged data / high-stakes action → ConfirmDialog with concrete
+//    consequence (e.g. "You'll lose 3 logged sets") + undo toast on confirm.
+// Both components are pure rendering — state lives at App level via setConfirmDialog
+// and triggerUndo so they can be invoked from anywhere via prop drilling.
+function ConfirmDialog({ title, message, confirmLabel, cancelLabel = "Cancel", variant = "destructive", onConfirm, onCancel }) {
+  const t = useT();
+  const danger = variant === "destructive";
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} style={{ position: "fixed", inset: 0, zIndex: 2300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={onCancel} />
+      <div style={{ position: "relative", maxWidth: 380, width: "100%", background: t.surfaceHigh, borderRadius: 16, padding: "20px 20px 18px", boxShadow: "0 20px 60px rgba(0,0,0,0.5)", border: `1px solid ${t.border}`, animation: "bl-card-in 0.25s ease both" }}>
+        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: t.text, marginBottom: 8 }}>{title}</div>
+        <div style={{ fontSize: 14, color: t.textSub, lineHeight: 1.5, marginBottom: 18 }}>{message}</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCancel} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 44, touchAction: "manipulation" }}>{cancelLabel}</button>
+          <button onClick={onConfirm} style={{ flex: 1, background: danger ? "linear-gradient(135deg, #D96B7A, #B0566A)" : `linear-gradient(135deg, ${accent}, #4A8BC4)`, border: "none", color: "#fff", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 44, touchAction: "manipulation" }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UndoToast({ message, onUndo, onDismiss, durationMs = 5000 }) {
+  const t = useT();
+  useEffect(() => {
+    const id = setTimeout(onDismiss, durationMs);
+    return () => clearTimeout(id);
+  }, [onDismiss, durationMs]);
+  return (
+    <div role="status" aria-live="polite" style={{ position: "fixed", bottom: TOAST_BOTTOM, left: 12, right: 12, zIndex: 2150, maxWidth: 396, marginLeft: "auto", marginRight: "auto", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "10px 14px", color: t.text, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(0,0,0,0.45)", animation: "bl-card-in 0.25s ease both", display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ flex: 1, lineHeight: 1.35 }}>{message}</span>
+      <button onClick={() => { onUndo(); onDismiss(); }} style={{ background: accent, border: "none", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, minHeight: 32, touchAction: "manipulation" }}>Undo</button>
+    </div>
+  );
+}
+
 // ── Fix #84: Warmup Calculator ────────────────────────────────────────
 // Given a working-set weight, generate a 4-set warmup ladder.
 // Scheme: empty bar × 8 → ~50% × 5 → ~70% × 3 → ~85% × 1.
@@ -4691,6 +4730,14 @@ export default function App() {
   // pop the keyboard. Users tap the search field manually if they want to type. (Was
   // pickerAutoFocus state; removed because UX feedback was that auto-pop felt intrusive.)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  // Fix #105: shared destructive-action state. confirmDialog renders ConfirmDialog modal;
+  // undoState renders UndoToast. triggerUndo is the convenience helper any destructive
+  // action calls to expose an Undo affordance for ~5s.
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [undoState, setUndoState] = useState(null);
+  const triggerUndo = (message, onUndo, durationMs = 5000) => {
+    setUndoState({ message, onUndo, durationMs, key: Date.now() });
+  };
   const [showTour, setShowTour] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
@@ -4977,6 +5024,41 @@ export default function App() {
     playComplete();
     setWorkout(null); setView("home");
     setCompletedWorkout({ workout: cleaned, prevWorkouts: prev });
+  };
+
+  // Fix #105: hybrid destructive flow for removing an exercise from the active workout.
+  //  - 0 logged sets → instant remove + Undo toast (low friction, easy recovery).
+  //  - >=1 logged sets → ConfirmDialog with concrete loss callout, then remove + Undo
+  //    on confirm (high friction matches high recovery cost).
+  // The Undo callback re-inserts the exercise at its original index so order is preserved.
+  const requestRemoveExercise = (idx) => {
+    const ex = workout?.exercises?.[idx];
+    if (!ex) return;
+    const loggedSets = (ex.sets || []).filter(s => (s.weight !== "" && s.weight != null) || (s.reps !== "" && s.reps != null)).length;
+    const performRemove = () => {
+      setWorkout(w => {
+        if (!w) return w;
+        return { ...w, exercises: w.exercises.filter((_, j) => j !== idx) };
+      });
+      triggerUndo(`${ex.name} removed`, () => {
+        setWorkout(w => {
+          if (!w) return w;
+          const next = [...w.exercises];
+          next.splice(idx, 0, ex);
+          return { ...w, exercises: next };
+        });
+      });
+    };
+    if (loggedSets > 0) {
+      setConfirmDialog({
+        title: "Delete exercise?",
+        message: `Remove ${ex.name}? You'll lose ${loggedSets} logged set${loggedSets === 1 ? "" : "s"}.`,
+        confirmLabel: "Delete",
+        onConfirm: () => { setConfirmDialog(null); performRemove(); },
+      });
+    } else {
+      performRemove();
+    }
   };
   // Fix #22 helper: filter for History search + range (also used by export when scope="filtered")
   const getFilteredWorkouts = () => {
@@ -5279,6 +5361,16 @@ export default function App() {
             </button>
           )}
 
+          {/* Fix #103: primary "+ Add Exercise" affordance — sits immediately after the Repeat /
+              Browse / Templates row when empty (so users see it without scrolling), and at the
+              top of the exercise list when a workout is in progress. The bottom slot is removed
+              and the redundant empty-state hint goes with it. */}
+          {!showExPicker && (
+            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.solidBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 12, fontSize: 14, fontWeight: 700, gap: 8 }}>
+              <Icon name="plus" size={15} /> Add Exercise
+            </button>
+          )}
+
           {/* Focus mode: only one exercise expanded (active); others queued (collapsed) or done.
               Sort: active → queued (in original order) → done (in original order).
               Hidden when picker is open so the screen stays focused on adding the next exercise. */}
@@ -5315,13 +5407,13 @@ export default function App() {
                       if (allDone) { setShowExPicker(true); }
                     }
                   }}
-                  onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
+                  onRemove={() => requestRemoveExercise(i)}
                 />
               );
             });
           })()}
 
-          {showExPicker ? (
+          {showExPicker && (
             <div style={S.card()}>
               {/* Top-of-picker Finish button — lets the user wrap up without closing search first.
                   Always green to match 'Done with this exercise'. Only when workout has exercises. */}
@@ -5423,17 +5515,9 @@ export default function App() {
                 )}
               </div>
             </div>
-          ) : (
-            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
-              <Icon name="plus" size={15} /> Add Exercise
-            </button>
           )}
-          {/* Finish Workout moved to the top (just under rest timer). Bottom slot removed. */}
-          {(!workout || workout.exercises.length === 0) && !showExPicker && (
-            <div style={{ textAlign: "center", color: t.textMuted, padding: "28px 0 0", fontSize: 14 }}>
-              <div>Add exercises or load a previous workout</div>
-            </div>
-          )}
+          {/* Bottom Add Exercise slot + redundant empty-state hint removed (Fix #103). The
+              primary affordance now lives above the exercise list (see top-of-Log slot). */}
         </div>
       )}
 
@@ -6081,6 +6165,27 @@ export default function App() {
       {showTour && <OnboardingTour onDone={() => { setShowTour(false); save({ ...data, profile: { ...(data.profile || {}), onboarded: true } }); }} />}
       {/* Fix #61 + #102: Cookie / data consent banner with versioned + Firestore-mirrored persistence */}
       <CookieBanner data={data} save={save} />
+      {/* Fix #105: shared destructive-action UI */}
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+      {undoState && (
+        <UndoToast
+          key={undoState.key}
+          message={undoState.message}
+          onUndo={undoState.onUndo}
+          onDismiss={() => setUndoState(null)}
+          durationMs={undoState.durationMs}
+        />
+      )}
       {/* Fix #54: Profile saved toast */}
       {profileSavedFlash && (
         <div style={{ position: "fixed", bottom: TOAST_BOTTOM, left: "50%", transform: "translateX(-50%)", zIndex: 2100, background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.45)", borderRadius: 12, padding: "10px 18px", color: "#5bb85b", fontSize: 13, fontWeight: 700, boxShadow: "0 8px 32px rgba(0,0,0,0.35)", pointerEvents: "none", animation: "bl-card-in 0.25s ease both" }}>
