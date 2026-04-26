@@ -185,8 +185,8 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.51";
-const BUILD_DATE  = "2026-04-25";
+const APP_VERSION = "2.4.52";
+const BUILD_DATE  = "2026-04-26";
 
 function useStorage(uid) {
   const [data, setData] = useState({ workouts: [], bodyweight: [] });
@@ -4937,14 +4937,27 @@ export default function App() {
       }).map(ex => ({ ...ex, _tier: 1 }));
     }
 
-    // Tier 1: name matches
+    // Tier 1: name matches + alias matches.
+    //  - Score 0-3: name match (exact > startsWith > word-startsWith > contains).
+    //  - Score 4-7: alias match (same sub-tiers, falls back if no name match). Aliases come
+    //    from the taxonomy import (~1,499 of 1,640 entries have them) and capture common
+    //    short / colloquial names — e.g. "rdl" → Barbell Romanian Deadlift, "db curl" →
+    //    Dumbbell Curl. Critical for findability since most users won't type the formal
+    //    title-case name from memory.
     const nameScored = pool.map(ex => {
       const name = (ex.name || "").toLowerCase();
+      const aliases = (ex.aliases || []).map(a => a.toLowerCase());
       let score = -1;
       if (name === trimmedSearch) score = 0;
       else if (name.startsWith(trimmedSearch)) score = 1;
       else if (name.split(/\s+/).some(w => w.startsWith(trimmedSearch))) score = 2;
       else if (name.includes(trimmedSearch)) score = 3;
+      if (score < 0 && aliases.length) {
+        if (aliases.includes(trimmedSearch)) score = 4;
+        else if (aliases.some(a => a.startsWith(trimmedSearch))) score = 5;
+        else if (aliases.some(a => a.split(/\s+/).some(w => w.startsWith(trimmedSearch)))) score = 6;
+        else if (aliases.some(a => a.includes(trimmedSearch))) score = 7;
+      }
       return { ex, score };
     }).filter(s => s.score >= 0);
     nameScored.sort((a, b) => a.score - b.score || a.ex.name.localeCompare(b.ex.name));
@@ -5510,12 +5523,14 @@ export default function App() {
                 <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
-              {/* Match counter — Tier 1 (name match) and Tier 2 (primary-muscle match) shown separately when both have results */}
+              {/* Match counter — Tier 1 (name + alias match) and Tier 2 (primary-muscle match) shown separately when both have results.
+                  Tier 1 covers both formal name matches and alias matches (e.g. "rdl" → Barbell Romanian Deadlift). Counter just says
+                  "{N} matches" since the user sees the actual matches in the list and the label "by name" would mislead alias hits. */}
               {trimmedSearch && (
                 <div style={{ fontSize: 11, color: filtered.length === 0 ? t.warning || "#E8B64C" : t.textMuted, marginBottom: 8, marginTop: -4, lineHeight: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <span>
                     {tier2Count > 0
-                      ? `${tier1Count} by name · ${tier2Count} by muscle`
+                      ? `${tier1Count} ${tier1Count === 1 ? "match" : "matches"} · ${tier2Count} by muscle`
                       : `${tier1Count} ${tier1Count === 1 ? "match" : "matches"}`}
                     {hasActiveFilters && filtered.length > 0 ? " in current filters" : ""}
                   </span>
