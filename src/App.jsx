@@ -179,7 +179,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.46";
+const APP_VERSION = "2.4.47";
 const BUILD_DATE  = "2026-04-25";
 
 function useStorage(uid) {
@@ -4536,7 +4536,9 @@ export default function App() {
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showWarmup, setShowWarmup] = useState(false);
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState(null);
-  const [pickerAutoFocus, setPickerAutoFocus] = useState(true); // suppressed when picker auto-opens after a Done
+  // Picker search input intentionally does NOT auto-focus — opening the picker shouldn't
+  // pop the keyboard. Users tap the search field manually if they want to type. (Was
+  // pickerAutoFocus state; removed because UX feedback was that auto-pop felt intrusive.)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
@@ -5159,7 +5161,7 @@ export default function App() {
                       // If everything is now done and there's no queued exercise to flow into,
                       // auto-open the picker so the user can add another one. No keyboard pop.
                       const allDone = exercises.every(e => e.done);
-                      if (allDone) { setPickerAutoFocus(false); setShowExPicker(true); }
+                      if (allDone) { setShowExPicker(true); }
                     }
                   }}
                   onRemove={() => setWorkout({ ...workout, exercises: workout.exercises.filter((_, j) => j !== i) })}
@@ -5194,7 +5196,7 @@ export default function App() {
               )}
               {/* Search row */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
+                <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
               {/* Match counter — Tier 1 (name match) and Tier 2 (primary-muscle match) shown separately when both have results */}
@@ -5271,7 +5273,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setPickerAutoFocus(true); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
+            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
               <Icon name="plus" size={15} /> Add Exercise
             </button>
           )}
