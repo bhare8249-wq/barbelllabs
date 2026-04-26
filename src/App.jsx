@@ -65,6 +65,12 @@ const THEMES = {
 };
 const accent     = "#5B9BD5";   // Steel Blue
 const accentGlow = "rgba(91,155,213,0.20)";
+// Fix #98: shared toast position — all transient bottom-floating toasts use this offset so they
+// consistently clear the bottom nav (62px) + the Profile-tab Sign Out button (sits ~50px tall
+// above the nav) + breathing room (~16px). Animation across all toasts is `bl-card-in 0.25s`
+// (defined in the global style block); success-flash duration is 2200ms, error banners persist
+// until dismissed or auto-cleared on next successful save.
+const TOAST_BOTTOM = "calc(140px + env(safe-area-inset-bottom, 0px))";
 const haptic = (pattern = 10) => { try { navigator.vibrate(pattern); } catch (_) {} };
 
 // Fix #77: lightweight Web-Audio tone player. Off by default — opt-in via Settings → Workout Preferences.
@@ -179,7 +185,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.48";
+const APP_VERSION = "2.4.49";
 const BUILD_DATE  = "2026-04-25";
 
 function useStorage(uid) {
@@ -2724,7 +2730,7 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON }) {
+function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON, consentActive, onWithdrawConsent }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2902,6 +2908,17 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
                   <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
                     <Icon name="history" size={16} />
                     Restore from backup
+                  </span>
+                  <Icon name="chevronRight" size={14} color={t.textMuted} />
+                </button>
+              )}
+              {/* Fix #102: Manage Cookie Preferences — only shown when consent is currently active.
+                  Tapping it withdraws consent (clears local + Firestore) and the banner re-shows. */}
+              {consentActive && onWithdrawConsent && (
+                <button onClick={onWithdrawConsent} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                    <Icon name="shield" size={16} />
+                    Manage Cookie Preferences
                   </span>
                   <Icon name="chevronRight" size={14} color={t.textMuted} />
                 </button>
@@ -3377,15 +3394,59 @@ function calcPlates(target, barWeight, unit, customPlates) {
   return { plates: result, remainder: Math.round(remaining * 1000) / 1000 };
 }
 
-// ── Fix #61: Cookie / data consent banner (dismiss-once) ──────────────
-function CookieBanner() {
+// ── Fix #61 + #102: Cookie / data consent banner ──────────────────────
+// Persistence strategy:
+//  - Versioned localStorage key (bl_privacy_consent_v1) — fast first-paint check.
+//  - Mirrored to Firestore at users/{uid}.privacyConsent — survives localStorage clears
+//    AND syncs across devices (user signs in on a new phone, banner stays hidden).
+//  - Bumping the suffix (v2 / v3) on policy changes will auto-re-prompt every user.
+//  - One-time migration: legacy `bl_cookie_consent` (Fix #61 v0) is auto-imported on read.
+//  - Settings → Privacy exposes a "Manage Cookie Preferences" → withdraw button that clears
+//    both stores so the banner re-shows.
+const CONSENT_KEY = "bl_privacy_consent_v1";
+const LEGACY_CONSENT_KEY = "bl_cookie_consent";
+
+function readLocalConsent() {
+  try {
+    let v = localStorage.getItem(CONSENT_KEY);
+    if (!v) {
+      // One-time migration from the unversioned Fix #61 key. Existing users don't get re-prompted.
+      const legacy = localStorage.getItem(LEGACY_CONSENT_KEY);
+      if (legacy) {
+        localStorage.setItem(CONSENT_KEY, legacy);
+        try { localStorage.removeItem(LEGACY_CONSENT_KEY); } catch {}
+        v = legacy;
+      }
+    }
+    return v || null;
+  } catch { return null; }
+}
+
+function CookieBanner({ data, save }) {
   const t = useT();
-  const [dismissed, setDismissed] = useState(() => {
-    try { return !!localStorage.getItem("bl_cookie_consent"); } catch { return false; }
-  });
+  // Hidden if EITHER local or Firestore consent record exists.
+  const localConsent = readLocalConsent();
+  const remoteConsent = data?.privacyConsent?.acceptedAt;
+  const [dismissed, setDismissed] = useState(!!(localConsent || remoteConsent));
+
+  // If a remote consent record arrives later (e.g. fresh login on a new device, Firestore
+  // snapshot fires after first render), seed localStorage and hide the banner.
+  useEffect(() => {
+    if (remoteConsent && !localConsent) {
+      try { localStorage.setItem(CONSENT_KEY, remoteConsent); } catch {}
+      setDismissed(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteConsent]);
+
   if (dismissed) return null;
+
   const accept = () => {
-    try { localStorage.setItem("bl_cookie_consent", new Date().toISOString()); } catch {}
+    const stamp = new Date().toISOString();
+    try { localStorage.setItem(CONSENT_KEY, stamp); } catch {}
+    if (save && data) {
+      save({ ...data, privacyConsent: { acceptedAt: stamp, version: "v1" } });
+    }
     setDismissed(true);
   };
   return (
@@ -3398,6 +3459,18 @@ function CookieBanner() {
       </button>
     </div>
   );
+}
+
+// Withdraw helper used by the Settings → Privacy → Manage Cookie Preferences button.
+// Clears local + Firestore consent records so the banner re-shows on next render.
+function withdrawConsent({ data, save }) {
+  try { localStorage.removeItem(CONSENT_KEY); } catch {}
+  try { localStorage.removeItem(LEGACY_CONSENT_KEY); } catch {}
+  if (save && data) {
+    const next = { ...data };
+    delete next.privacyConsent;
+    save(next);
+  }
 }
 
 // ── Fix #84: Warmup Calculator ────────────────────────────────────────
@@ -5959,6 +6032,8 @@ export default function App() {
         workoutPrefs={data.workoutPrefs || {}}
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
         onDeleteAccount={() => { setShowSettings(false); setShowDeleteAccount(true); }}
+        consentActive={!!(readLocalConsent() || data?.privacyConsent?.acceptedAt)}
+        onWithdrawConsent={() => { withdrawConsent({ data, save }); setShowSettings(false); }}
         onBackupJSON={() => {
           // Fix #66: full local backup including profile, workouts, templates, tags, prefs.
           const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -6004,11 +6079,11 @@ export default function App() {
       {showTools && <ToolsMenu onClose={() => setShowTools(false)} on1RM={() => setShow1RM(true)} onPlates={() => setShowPlateCalc(true)} onWarmup={() => setShowWarmup(true)} />}
       {showManageTags && <ManageTagsModal customTags={data.customTags} onClose={() => setShowManageTags(false)} onChange={(next) => save({ ...data, customTags: next })} />}
       {showTour && <OnboardingTour onDone={() => { setShowTour(false); save({ ...data, profile: { ...(data.profile || {}), onboarded: true } }); }} />}
-      {/* Fix #61: Cookie / data consent banner */}
-      <CookieBanner />
+      {/* Fix #61 + #102: Cookie / data consent banner with versioned + Firestore-mirrored persistence */}
+      <CookieBanner data={data} save={save} />
       {/* Fix #54: Profile saved toast */}
       {profileSavedFlash && (
-        <div style={{ position: "fixed", bottom: "calc(92px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 2100, background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.45)", borderRadius: 12, padding: "10px 18px", color: "#5bb85b", fontSize: 13, fontWeight: 700, boxShadow: "0 8px 32px rgba(0,0,0,0.35)", pointerEvents: "none", animation: "bl-card-in 0.25s ease both" }}>
+        <div style={{ position: "fixed", bottom: TOAST_BOTTOM, left: "50%", transform: "translateX(-50%)", zIndex: 2100, background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.45)", borderRadius: 12, padding: "10px 18px", color: "#5bb85b", fontSize: 13, fontWeight: 700, boxShadow: "0 8px 32px rgba(0,0,0,0.35)", pointerEvents: "none", animation: "bl-card-in 0.25s ease both" }}>
           ✓ Profile saved
         </div>
       )}
@@ -6024,7 +6099,7 @@ export default function App() {
       {/* Fix #69: Sync error banner — appears when a Firestore write fails so the user
           can retry instead of losing the change silently. Auto-clears on next successful save. */}
       {saveError && (
-        <div role="alert" aria-live="polite" style={{ position: "fixed", bottom: "calc(92px + env(safe-area-inset-bottom, 0px))", left: 12, right: 12, zIndex: 2150, maxWidth: 396, marginLeft: "auto", marginRight: "auto", background: "rgba(217,107,122,0.18)", border: "1px solid rgba(217,107,122,0.55)", borderRadius: 12, padding: "12px 14px", color: "#F5C7CD", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(0,0,0,0.45)", animation: "bl-card-in 0.25s ease both", display: "flex", alignItems: "center", gap: 10 }}>
+        <div role="alert" aria-live="polite" style={{ position: "fixed", bottom: TOAST_BOTTOM, left: 12, right: 12, zIndex: 2150, maxWidth: 396, marginLeft: "auto", marginRight: "auto", background: "rgba(217,107,122,0.18)", border: "1px solid rgba(217,107,122,0.55)", borderRadius: 12, padding: "12px 14px", color: "#F5C7CD", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(0,0,0,0.45)", animation: "bl-card-in 0.25s ease both", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 16, flexShrink: 0 }}>⚠</span>
           <span style={{ flex: 1, lineHeight: 1.35 }}>{saveError.message} — check connection and try again.</span>
           <button onClick={saveError.retry} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, minHeight: 32 }}>Retry</button>
