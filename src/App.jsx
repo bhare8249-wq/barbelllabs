@@ -185,7 +185,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.50";
+const APP_VERSION = "2.4.51";
 const BUILD_DATE  = "2026-04-25";
 
 function useStorage(uid) {
@@ -2100,7 +2100,7 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
 }
 
 // ── Exercise Block ────────────────────────────────────────────────────
-function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, mode = "active", onFocus, queueIndex }) {
+function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, mode = "active", onFocus, queueIndex, triggerUndo }) {
   const S = useS();
   const t = useT();
   const [coachDismissed, setCoachDismissed] = useState(false);
@@ -2163,7 +2163,21 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
-  const removeSet = (i) => onChange({ ...exercise, sets: exercise.sets.filter((_, j) => j !== i) });
+  // Fix #105: set delete is low-stakes (single set's data) but high-frequency, so just an
+  // Undo toast — no modal friction. The undo restores the set at its original index using
+  // the closure-captured exercise as the baseline. Trade-off: any concurrent set edits
+  // during the 5s window will be reverted on undo. Acceptable for a single-row action.
+  const removeSet = (i) => {
+    const removed = exercise.sets[i];
+    onChange({ ...exercise, sets: exercise.sets.filter((_, j) => j !== i) });
+    if (triggerUndo) {
+      triggerUndo("Set removed", () => {
+        const next = [...exercise.sets];
+        next.splice(i, 0, removed);
+        onChange({ ...exercise, sets: next });
+      });
+    }
+  };
   const markDone = () => {
     haptic([0, 30, 30, 80]);
     playDing();
@@ -4738,6 +4752,12 @@ export default function App() {
   const triggerUndo = (message, onUndo, durationMs = 5000) => {
     setUndoState({ message, onUndo, durationMs, key: Date.now() });
   };
+  // Fix #105: latest-data ref for undo callbacks. Closures capture `data` lexically — by the
+  // time the undo fires (up to 5s later) the captured `data` is stale, so writing
+  // `save({ ...data, ... })` would clobber any other changes that happened in the window.
+  // Restore handlers read from dataRef.current to merge into the *current* state.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
   const [showTour, setShowTour] = useState(false);
 
   const t = THEMES[theme]; const S = makeStyles(t);
@@ -5060,6 +5080,30 @@ export default function App() {
       performRemove();
     }
   };
+  // Fix #105: history workout delete with ConfirmDialog (high-stakes — losing a session's
+  // worth of data) + Undo. Stats and PRs naturally recompute from the workouts array, so
+  // restore at original index keeps everything consistent.
+  const requestDeleteWorkout = (idx) => {
+    const w = data.workouts?.[idx];
+    if (!w) return;
+    const exCount = w.exercises?.length || 0;
+    setConfirmDialog({
+      title: "Delete workout?",
+      message: `Remove this ${exCount}-exercise session from ${w.date}? Stats and PRs will recalculate.`,
+      confirmLabel: "Delete",
+      onConfirm: () => {
+        setConfirmDialog(null);
+        const cur = dataRef.current;
+        save({ ...cur, workouts: cur.workouts.filter((_, j) => j !== idx) });
+        triggerUndo("Workout deleted", () => {
+          const c2 = dataRef.current;
+          const next = [...c2.workouts];
+          next.splice(Math.min(idx, next.length), 0, w);
+          save({ ...c2, workouts: next });
+        });
+      },
+    });
+  };
   // Fix #22 helper: filter for History search + range (also used by export when scope="filtered")
   const getFilteredWorkouts = () => {
     const searchLower = historySearch.trim().toLowerCase();
@@ -5142,7 +5186,30 @@ export default function App() {
     save({ ...data, templates: [...templates, tmpl] });
     setShowSaveTemplate(false);
   };
-  const deleteTemplate = (id) => save({ ...data, templates: templates.filter(t => t.id !== id) });
+  // Fix #105: template delete now goes through ConfirmDialog (high-stakes — templates take
+  // effort to build). Undo restores the template at its original index.
+  const deleteTemplate = (id) => {
+    const tmpls = data.templates || [];
+    const tmpl = tmpls.find(t => t.id === id);
+    if (!tmpl) return;
+    const idx = tmpls.findIndex(t => t.id === id);
+    setConfirmDialog({
+      title: "Delete template?",
+      message: `Remove "${tmpl.name}" from your saved templates? You can undo this within 5 seconds.`,
+      confirmLabel: "Delete",
+      onConfirm: () => {
+        setConfirmDialog(null);
+        const cur = dataRef.current;
+        save({ ...cur, templates: (cur.templates || []).filter(t => t.id !== id) });
+        triggerUndo(`"${tmpl.name}" deleted`, () => {
+          const c2 = dataRef.current;
+          const next = [...(c2.templates || [])];
+          next.splice(Math.min(idx, next.length), 0, tmpl);
+          save({ ...c2, templates: next });
+        });
+      },
+    });
+  };
   const renameTemplate = (id, name) => save({ ...data, templates: templates.map(t => t.id === id ? { ...t, name } : t) });
   const loadTemplate = (tmpl) => {
     setWorkout(prev => ({ ...(prev || { date: todayISO(), startTime: Date.now(), exercises: [] }), exercises: tmpl.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) }));
@@ -5394,6 +5461,7 @@ export default function App() {
                   mode={mode}
                   queueIndex={queueIndex}
                   onFocus={() => setCurrentExerciseIdx(i)}
+                  triggerUndo={triggerUndo}
                   effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
                   onChange={updated => {
                     const exercises = [...workout.exercises];
@@ -5657,7 +5725,7 @@ export default function App() {
                   <WorkoutHistoryCard workout={w} index={i}
                     customTags={data.customTags}
                     onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
-                    onDelete={(idx) => save({ ...data, workouts: data.workouts.filter((_, j) => j !== idx) })}
+                    onDelete={(idx) => requestDeleteWorkout(idx)}
                     onSaveTemplate={(src) => {
                       const name = suggestTemplateName(src.exercises, templates, src.date);
                       const tmpl = { id: Date.now().toString(), name, exercises: src.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
