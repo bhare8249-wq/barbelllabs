@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { flushSync } from "react-dom";
 import { auth, googleProvider, db } from "./firebase";
 import { doc, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import {
@@ -179,7 +180,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.46";
+const APP_VERSION = "2.4.47";
 const BUILD_DATE  = "2026-04-25";
 
 function useStorage(uid) {
@@ -4537,6 +4538,21 @@ export default function App() {
   const [showWarmup, setShowWarmup] = useState(false);
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState(null);
   const [pickerAutoFocus, setPickerAutoFocus] = useState(true); // suppressed when picker auto-opens after a Done
+  // Ref to the picker search input. Used by openPicker() to imperatively focus the input
+  // synchronously inside the user-tap event so iOS Safari pops the keyboard. (autoFocus alone
+  // doesn't trigger the on-screen keyboard on iOS — focus must happen during the gesture.)
+  const pickerInputRef = useRef(null);
+  // Open the picker AND pop the keyboard inside one user gesture. flushSync forces React to
+  // synchronously commit the state change so the input is in the DOM before we call .focus().
+  const openPicker = () => {
+    if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] });
+    flushSync(() => {
+      setPickerAutoFocus(true);
+      setShowExPicker(true);
+    });
+    // Now the input exists — focusing it is still inside the user-gesture window.
+    pickerInputRef.current?.focus();
+  };
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showTour, setShowTour] = useState(false);
 
@@ -5194,7 +5210,7 @@ export default function App() {
               )}
               {/* Search row */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <input value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
+                <input ref={pickerInputRef} value={exSearch} onChange={e => setExSearch(e.target.value)} placeholder="Search exercises…" autoFocus={pickerAutoFocus} style={{ ...S.inputStyle(), flex: 1, width: "auto" }} />
                 <button onClick={() => { setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all"); }} style={S.iconBtn()}><Icon name="x" size={16} /></button>
               </div>
               {/* Match counter — Tier 1 (name match) and Tier 2 (primary-muscle match) shown separately when both have results */}
@@ -5271,7 +5287,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button onClick={() => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setPickerAutoFocus(true); setShowExPicker(true); }} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
+            <button onClick={openPicker} style={{ ...S.ghostBtn(), width: "100%", justifyContent: "center", padding: "13px", marginBottom: 16, borderRadius: 10 }}>
               <Icon name="plus" size={15} /> Add Exercise
             </button>
           )}
