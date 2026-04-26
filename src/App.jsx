@@ -185,7 +185,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.52";
+const APP_VERSION = "2.4.53";
 const BUILD_DATE  = "2026-04-26";
 
 function useStorage(uid) {
@@ -2003,6 +2003,19 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
   const rpe = set.rpe != null ? parseFloat(set.rpe) : null;
   const rir = set.rir != null ? parseFloat(set.rir) : (rpe != null ? Math.round(10 - rpe) : null);
   const hasRpe = rpe != null;
+
+  // Fix #106: auto-collapse RPE panel ~1.8s after the last value change so the row stays
+  // compact once the user has logged effort. Each rpe/rir change restarts the timer, so
+  // continuous adjustments keep the panel open. Initial open with no value yet stays
+  // open until the user picks something. Tapping the chip still manually toggles. Future
+  // enhancement: skip auto-collapse during fast-paced sessions (drop sets / supersets) —
+  // defer until we have user signal that the default timing is too aggressive.
+  useEffect(() => {
+    if (!showRpe) return;
+    if (rpe == null && rir == null) return;
+    const id = setTimeout(() => setShowRpe(false), 1800);
+    return () => clearTimeout(id);
+  }, [showRpe, set.rpe, set.rir]); // eslint-disable-line react-hooks/exhaustive-deps
   // Fix #82: respect user's preferred effort metric for the chip label
   const chipValue = effortMetric === "rir"
     ? (rir != null ? rir : null)
@@ -2104,6 +2117,12 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   const S = useS();
   const t = useT();
   const [coachDismissed, setCoachDismissed] = useState(false);
+  // Fix #106: collapsible Notes. Defaults to expanded if there's no note (first-time entry)
+  // and collapsed if a note already exists (so the row stays compact when re-opening an
+  // exercise). Tapping the collapsed pill expands + focuses the textarea; blur with
+  // content collapses again.
+  const [notesExpanded, setNotesExpanded] = useState(!exercise.note);
+  const noteRef = useRef(null);
 
   // "Done Exercise" — collapsed pill view when exercise.done is truthy
   if (exercise.done) {
@@ -2247,14 +2266,40 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
         {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
-      <textarea
-        value={exercise.note || ""}
-        onChange={e => onChange({ ...exercise, note: e.target.value })}
-        placeholder="Notes (how it felt, reminders…)"
-        rows={1}
-        style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "12px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }}
-        onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
-      />
+      {/* Fix #106: Notes — collapsed pill when content exists and not focused; full textarea when expanded. */}
+      {(() => {
+        const noteText = exercise.note || "";
+        const showCollapsed = !notesExpanded && noteText.trim().length > 0;
+        if (showCollapsed) {
+          const lineCount = noteText.split("\n").filter(l => l.trim().length > 0).length || 1;
+          const summary = lineCount > 1
+            ? `Notes (${lineCount} lines)`
+            : (noteText.length > 36 ? noteText.substring(0, 33).trim() + "…" : noteText);
+          return (
+            <button
+              onClick={() => { setNotesExpanded(true); setTimeout(() => noteRef.current?.focus(), 0); }}
+              style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.textSub, padding: "10px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit", touchAction: "manipulation" }}
+              aria-label="Expand notes"
+            >
+              <span style={{ flexShrink: 0 }}>📝</span>
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+              <span style={{ color: t.textMuted, fontSize: 12, flexShrink: 0 }}>▸</span>
+            </button>
+          );
+        }
+        return (
+          <textarea
+            ref={noteRef}
+            value={noteText}
+            onChange={e => onChange({ ...exercise, note: e.target.value })}
+            onBlur={() => { if (noteText.trim().length > 0) setNotesExpanded(false); }}
+            placeholder="Notes (how it felt, reminders…)"
+            rows={1}
+            style={{ marginTop: 10, width: "100%", background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12, color: t.text, padding: "12px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }}
+            onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+          />
+        );
+      })()}
       {/* Mark Done — collapses card and lets user move to next exercise */}
       <button onClick={markDone} style={{ width: "100%", marginTop: 12, background: "linear-gradient(135deg, #5bb85b, #3a8a3a)", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, touchAction: "manipulation" }}>
         <Icon name="check" size={16} /> Done with this exercise
