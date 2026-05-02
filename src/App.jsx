@@ -2041,7 +2041,7 @@ function Big3PRs({ workouts, profile, onSave, onLogExercise }) {
 }
 
 // ── Set Row ───────────────────────────────────────────────────────────
-function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstFocus }) {
+function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstFocus, onMarkDone }) {
   const t = useT(); const S = useS();
   const [showRpe, setShowRpe] = useState(false);
   // Smart-timer first-focus trigger — fires once per set-row lifecycle when the user
@@ -2055,6 +2055,17 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     if (set.weight || set.reps) return;
     firstFocusFiredRef.current = true;
     onFirstFocus?.();
+  };
+  // Per-set ✓ toggle. Tapping marks the set as completed (and toggles back if tapped
+  // again). When transitioning false → true, the parent's onMarkDone fires so the rest
+  // timer can react regardless of whether the set was empty, pre-populated from a
+  // template, or edited. Works for every workflow (the focus-to-start trigger only
+  // covered the empty-and-fill flow).
+  const toggleDone = () => {
+    const goingDone = !set.done;
+    onChange({ ...set, done: goingDone });
+    haptic(goingDone ? [0, 30, 20, 30] : 8);
+    if (goingDone) onMarkDone?.();
   };
   const rpe = set.rpe != null ? parseFloat(set.rpe) : null;
   const rir = set.rir != null ? parseFloat(set.rir) : (rpe != null ? Math.round(10 - rpe) : null);
@@ -2112,7 +2123,25 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
               <Icon name="chevronDown" size={11} />
             </span>
           </button>
-          <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 32, height: 36, minWidth: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, marginLeft: "auto", touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
+          <button
+            onClick={toggleDone}
+            aria-label={set.done ? "Mark set incomplete" : "Mark set complete"}
+            aria-pressed={!!set.done}
+            style={{
+              background: set.done ? "#5bb85b" : "transparent",
+              border: `1.5px solid ${set.done ? "#5bb85b" : t.border}`,
+              color: set.done ? "#fff" : t.textMuted,
+              cursor: "pointer",
+              width: 32, height: 32, minWidth: 32, padding: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              borderRadius: 8, flexShrink: 0, marginLeft: "auto",
+              touchAction: "manipulation",
+              transition: "background 0.15s, border-color 0.15s, color 0.15s",
+            }}
+          >
+            <Icon name="check" size={14} />
+          </button>
+          <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 28, height: 36, minWidth: 28, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
         </div>
       </SwipeableRow>
 
@@ -2280,6 +2309,14 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
     if (!autoStartRest) return;
     window.dispatchEvent(new Event("gt-start-timer-if-idle"));
   };
+  // Explicit per-set "I just finished this" signal — works for empty, pre-filled
+  // (template / Repeat Last Session), and edited sets uniformly. Always resets the
+  // timer to full duration since the user explicitly tapped ✓; no prompt needed.
+  const handleSetMarkedDone = () => {
+    playDing();
+    if (!autoStartRest) return;
+    window.dispatchEvent(new Event("gt-start-timer"));
+  };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   // Fix #105: set delete is low-stakes (single set's data) but high-frequency, so just an
   // Undo toast — no modal friction. The undo restores the set at its original index using
@@ -2367,7 +2404,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
       )}
 
       <div style={{ marginBottom: 8 }}>
-        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} />)}
+        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} onMarkDone={handleSetMarkedDone} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
       {/* Smart-timer Add Set prompt (Fix #217 follow-up) — only renders when autoStartRest
