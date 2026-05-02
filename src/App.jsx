@@ -2128,7 +2128,10 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   const [notesExpanded, setNotesExpanded] = useState(!exercise.note);
   const noteRef = useRef(null);
 
-  // "Done Exercise" — collapsed pill view when exercise.done is truthy
+  // "Done Exercise" — collapsed pill view when exercise.done is truthy.
+  // Entrance animation (bl-done-in keyframes injected globally) slides the pill down from
+  // above with a slight overshoot so it visually flows from the active card's old position
+  // to its new home at the bottom of the list — replaces the instant snap.
   if (exercise.done) {
     const validSets = exercise.sets.filter(s => s.weight && s.reps);
     const topSet = validSets.reduce((best, s) => {
@@ -2138,7 +2141,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
     return (
       <button
         onClick={() => { onChange({ ...exercise, done: false }); onFocus?.(); }}
-        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation" }}
+        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation", animation: "bl-done-in 0.55s cubic-bezier(0.16,1,0.3,1) both" }}
       >
         <span style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#5bb85b", flexShrink: 0 }}>
           <Icon name="check" size={14} />
@@ -4913,6 +4916,7 @@ export default function App() {
       @keyframes bl-slide-r { from { opacity:0; transform:translateX(22px); } to { opacity:1; transform:translateX(0); } }
       @keyframes bl-slide-l { from { opacity:0; transform:translateX(-22px); } to { opacity:1; transform:translateX(0); } }
       @keyframes bl-card-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes bl-done-in { 0% { opacity:0; transform:translateY(-14px) scale(0.98); } 65% { opacity:1; transform:translateY(3px) scale(1.005); } 100% { opacity:1; transform:translateY(0) scale(1); } }
       @keyframes bl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     `;
     document.head.appendChild(style);
@@ -5406,8 +5410,10 @@ export default function App() {
 
           <RestTimer />
 
-          {/* Finish Workout — top placement. Compact while logging, big green when all exercises done. */}
-          {workout && workout.exercises.length > 0 && !showExPicker && (() => {
+          {/* Finish Workout — top placement. Compact while logging, big green when all exercises done.
+              Banner persists when picker opens so the "everything's done" celebration stays in view —
+              only the redundant big Finish button hides (picker has its own at the top). */}
+          {workout && workout.exercises.length > 0 && (() => {
             const allDone = workout.exercises.every(e => e.done);
             return (
               <>
@@ -5417,26 +5423,28 @@ export default function App() {
                     <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 600, lineHeight: 1.4 }}>All exercises done — wrap up to save your session.</div>
                   </div>
                 )}
-                <button onClick={finishWorkout} style={{
-                  width: "100%",
-                  background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
-                  border: "none",
-                  color: "#fff",
-                  borderRadius: 12,
-                  padding: allDone ? "16px 0" : "13px 0",
-                  fontFamily: "'Bebas Neue', cursive",
-                  fontSize: allDone ? 20 : 16,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  marginBottom: 14,
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "none",
-                  transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s",
-                  touchAction: "manipulation",
-                }}>
-                  <Icon name="check" size={allDone ? 18 : 16} /> Finish Workout
-                </button>
+                {!showExPicker && (
+                  <button onClick={finishWorkout} style={{
+                    width: "100%",
+                    background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
+                    border: "none",
+                    color: "#fff",
+                    borderRadius: 12,
+                    padding: allDone ? "16px 0" : "13px 0",
+                    fontFamily: "'Bebas Neue', cursive",
+                    fontSize: allDone ? 20 : 16,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    marginBottom: 14,
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "none",
+                    transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s",
+                    touchAction: "manipulation",
+                  }}>
+                    <Icon name="check" size={allDone ? 18 : 16} /> Finish Workout
+                  </button>
+                )}
               </>
             );
           })()}
