@@ -2127,6 +2127,12 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   // content collapses again.
   const [notesExpanded, setNotesExpanded] = useState(!exercise.note);
   const noteRef = useRef(null);
+  // Smooth Done transition — when user taps "Done with this exercise" we play an exit
+  // animation on the active card (fade + collapse) for 380ms BEFORE flipping the model
+  // to done:true. Without this, the active card unmounts instantly and the done pill
+  // mounts in its new position with no visual continuity. The 380ms gives the eye a
+  // chance to track the transition.
+  const [isFinishing, setIsFinishing] = useState(false);
 
   // "Done Exercise" — collapsed pill view when exercise.done is truthy.
   // Entrance animation (bl-done-in keyframes injected globally) slides the pill down from
@@ -2141,7 +2147,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
     return (
       <button
         onClick={() => { onChange({ ...exercise, done: false }); onFocus?.(); }}
-        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation", animation: "bl-done-in 0.55s cubic-bezier(0.16,1,0.3,1) both" }}
+        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation", animation: "bl-done-in 0.85s cubic-bezier(0.22,1,0.36,1) both" }}
       >
         <span style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#5bb85b", flexShrink: 0 }}>
           <Icon name="check" size={14} />
@@ -2207,7 +2213,8 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   const markDone = () => {
     haptic([0, 30, 30, 80]);
     playDing();
-    onChange({ ...exercise, done: true });
+    setIsFinishing(true);
+    setTimeout(() => onChange({ ...exercise, done: true }), 380);
   };
 
   const coach = coachFor(exercise.name, workouts);
@@ -2223,7 +2230,11 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   const cc = coach ? coachColors[coach.tone] || coachColors.progress : null;
 
   return (
-    <div style={S.card()}>
+    <div style={{
+      ...S.card(),
+      animation: isFinishing ? "bl-finishing 0.38s cubic-bezier(0.4,0,0.2,1) forwards" : undefined,
+      pointerEvents: isFinishing ? "none" : "auto",
+    }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: 1, color: accent }}>{exercise.name}</span>
         <button onClick={onRemove} style={S.iconBtn("#ff5b5b")}><Icon name="trash" size={15} /></button>
@@ -4916,7 +4927,8 @@ export default function App() {
       @keyframes bl-slide-r { from { opacity:0; transform:translateX(22px); } to { opacity:1; transform:translateX(0); } }
       @keyframes bl-slide-l { from { opacity:0; transform:translateX(-22px); } to { opacity:1; transform:translateX(0); } }
       @keyframes bl-card-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes bl-done-in { 0% { opacity:0; transform:translateY(-14px) scale(0.98); } 65% { opacity:1; transform:translateY(3px) scale(1.005); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+      @keyframes bl-done-in { 0% { opacity:0; transform:translateY(-18px) scale(0.96); } 70% { opacity:1; transform:translateY(2px) scale(1.005); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+      @keyframes bl-finishing { 0% { opacity:1; transform:translateY(0) scale(1); } 100% { opacity:0; transform:translateY(-8px) scale(0.97); } }
       @keyframes bl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     `;
     document.head.appendChild(style);
