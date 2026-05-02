@@ -2031,14 +2031,16 @@ function Big3PRs({ workouts, profile, onSave, onLogExercise }) {
 function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstFocus, onMarkDone }) {
   const t = useT(); const S = useS();
   const [showRpe, setShowRpe] = useState(false);
-  // Focus-to-start: fires once per set-row lifecycle when the user taps any input on a
-  // truly empty row (no weight, no reps). Signals the parent to kick the rest timer if
-  // it's idle. Tabbing through fields on the same row only fires once. Doesn't fire on
-  // pre-populated sets (template / Repeat Last Session) — those need ✓.
+  // Focus-to-start fires once per set-row lifecycle when the user taps any input on
+  // any set (empty or pre-filled). Signals the parent to kick the rest timer if it's
+  // idle. Captures the "user just walked back from lifting" moment regardless of
+  // whether the row was a fresh empty fill, a pre-loaded template entry, or an edit
+  // of a previously-logged value. Tabbing through fields on the same row only fires
+  // once. The parent's handler uses gt-start-timer-if-idle, so a running timer is
+  // never disrupted (preload-during-rest stays safe).
   const firstFocusFiredRef = useRef(false);
   const handleFirstFocus = () => {
     if (firstFocusFiredRef.current) return;
-    if (set.weight || set.reps) return;
     firstFocusFiredRef.current = true;
     onFirstFocus?.();
   };
@@ -2292,11 +2294,14 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
     if (!autoStartRest) return;
     window.dispatchEvent(new Event("gt-start-timer-if-idle"));
   };
-  // Explicit per-set "I just finished this" signal. Always resets timer to full.
+  // Explicit per-set "I just finished this" signal. Uses if-idle so tapping ✓ during
+  // an already-running rest cycle doesn't lose elapsed seconds — preserves accurate
+  // 1:30-from-walk-back timing across every workflow. The Add Set prompt's "Yes, reset"
+  // is the only auto path that force-resets a running timer.
   const handleSetMarkedDone = () => {
     playDing();
     if (!autoStartRest) return;
-    window.dispatchEvent(new Event("gt-start-timer"));
+    window.dispatchEvent(new Event("gt-start-timer-if-idle"));
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   // Fix #105: set delete is low-stakes (single set's data) but high-frequency, so just an
@@ -2975,7 +2980,7 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Smart rest timer</div>
-              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>When ON, the timer reacts to your logging style — tap a set's ✓, start typing into a fresh row, or hit Add Set after a complete set, and the timer starts (or asks if you're still resting). Off keeps the timer fully manual.</div>
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>When ON, the first thing you do after the timer is idle (tap a set's input, tap ✓, or hit Add Set) starts it — and once it's running, later actions don't reset it. Add Set with timer running asks "just finished?" so preloading mid-rest is safe. Off keeps it fully manual.</div>
             </div>
             <button
               onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest })}
