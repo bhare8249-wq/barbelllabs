@@ -2974,8 +2974,8 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Auto-start rest timer when set is marked done</div>
-              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>Tap the ✓ on a set to start the rest timer. Off by default — leaves the timer fully manual.</div>
+              <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Smart rest timer</div>
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>When ON, the timer reacts to your logging style — tap a set's ✓, start typing into a fresh row, or hit Add Set after a complete set, and the timer starts (or asks if you're still resting). Off keeps the timer fully manual.</div>
             </div>
             <button
               onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest })}

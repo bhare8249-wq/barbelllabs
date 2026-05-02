@@ -24,8 +24,8 @@ export const HELP_CONTENT = {
       { heading: "Log Your Sets", body: "Enter weight and reps, tap '+ Add Set' for more. Swipe left on a set row or tap the ✕ to delete it. Tap the RPE chip to rate effort (6–10) and set Reps in Reserve." },
       { heading: "AI Coach", body: "Each exercise shows a Coach card with a target based on your history. Tap 'Apply' to pre-fill the suggestion, or dismiss it." },
       { heading: "Tools ⋯", body: "The ⋯ icon in the top-right opens Tools: 1RM Calculator and Plate Calculator." },
-      { heading: "Rest Timer", body: "Pick a preset (30s–3m) or custom time. Manual by default — tap Start when ready. Want it automatic? Settings → Workout Preferences → enable auto-start. The ring turns green when rest is done." },
-      { heading: "Auto-start triggers (when enabled)", body: "Three signals can start the timer so any logging style works: (1) tap the ✓ on a set to mark it done — works for empty rows, pre-filled templates, or edited values; (2) tap into a fresh empty set's weight/reps and the timer kicks if it's idle; (3) tap Add Set after a complete set — silent reset if the timer's not running, prompts 'just finished?' if it is so preloading mid-rest doesn't lose your timer." },
+      { heading: "Rest Timer", body: "Pick a preset (30s–3m) or custom time. Manual by default — tap Start when ready, Pause/Reset on the timer, or just ignore it. The ring turns green when rest is done." },
+      { heading: "Smart Rest Timer", body: "Optional master switch in Settings → Workout Preferences. When ON, the timer reacts to whatever you do: tap the ✓ on a set, start typing into a fresh empty row, or hit Add Set after a complete set — any of those starts/resets the timer (and asks 'just finished?' only when it's genuinely ambiguous, like preloading the next row mid-rest). Off keeps it fully manual for users who don't want the timer in their flow." },
     ],
   },
   history: {
