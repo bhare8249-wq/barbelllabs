@@ -990,6 +990,14 @@ function RestTimer({ autoStartRest = false }) {
   const doneFiredRef = useRef(false); // ensures the "rest done" haptic/sound fires exactly once per timer
 
   const running = endsAt !== null;
+  // Broadcast timer "active" state on a window global so other components (notably
+  // ExerciseBlock's Add Set handler) can decide whether to prompt the user about
+  // resetting the timer vs starting a fresh one. Active = running or paused — done is
+  // not active. Cheap polling read is preferable to lifting state into App for now.
+  useEffect(() => {
+    try { window.__bl_timerActive = (endsAt !== null) || (pausedRemaining != null); } catch {}
+    return () => { try { window.__bl_timerActive = false; } catch {} };
+  }, [endsAt, pausedRemaining]);
   const remaining = running
     ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
     : (pausedRemaining ?? seconds);
@@ -1060,8 +1068,9 @@ function RestTimer({ autoStartRest = false }) {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  // External "gt-start-timer" event support (used by per-set buttons). Always starts fresh
-  // from the current preset duration.
+  // External "gt-start-timer" event — always resets to full duration.
+  // Used when the user explicitly confirms "I just finished a set", or when auto-start
+  // ON + Add Set logic decides to reset.
   useEffect(() => {
     const handler = () => {
       setEndsAt(Date.now() + seconds * 1000);
@@ -1073,6 +1082,20 @@ function RestTimer({ autoStartRest = false }) {
     window.addEventListener("gt-start-timer", handler);
     return () => window.removeEventListener("gt-start-timer", handler);
   }, [seconds]); // eslint-disable-line
+
+  // External "gt-start-timer-if-idle" event — starts the timer only if it isn't already
+  // running or paused. Used by the smart auto-start trigger (focus into an empty set's
+  // input) so we don't reset a running timer just because the user tabbed through fields.
+  useEffect(() => {
+    const handler = () => {
+      if (endsAt !== null || pausedRemaining != null || done) return;
+      setEndsAt(Date.now() + seconds * 1000);
+      doneFiredRef.current = false;
+      haptic(10); scheduleNotif(seconds);
+    };
+    window.addEventListener("gt-start-timer-if-idle", handler);
+    return () => window.removeEventListener("gt-start-timer-if-idle", handler);
+  }, [seconds, endsAt, pausedRemaining, done]); // eslint-disable-line
 
   const applyCustom = () => {
     const m = parseInt(customMin) || 0;
@@ -2014,9 +2037,21 @@ function Big3PRs({ workouts, profile, onSave, onLogExercise }) {
 }
 
 // ── Set Row ───────────────────────────────────────────────────────────
-function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
+function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstFocus }) {
   const t = useT(); const S = useS();
   const [showRpe, setShowRpe] = useState(false);
+  // Smart-timer first-focus trigger — fires once per set-row lifecycle when the user
+  // taps into any input while the set is empty (no weight, no reps). Signals the parent
+  // that the user just finished the previous lift in real life and is now starting to
+  // log it; the parent uses this to start the rest timer if it isn't already running.
+  // Tabbing through fields on the same empty row only fires once.
+  const firstFocusFiredRef = useRef(false);
+  const handleFirstFocus = () => {
+    if (firstFocusFiredRef.current) return;
+    if (set.weight || set.reps) return;
+    firstFocusFiredRef.current = true;
+    onFirstFocus?.();
+  };
   const rpe = set.rpe != null ? parseFloat(set.rpe) : null;
   const rir = set.rir != null ? parseFloat(set.rir) : (rpe != null ? Math.round(10 - rpe) : null);
   const hasRpe = rpe != null;
@@ -2052,9 +2087,9 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
       <SwipeableRow flat onDelete={onRemove} bgColor={t.surfaceHigh}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ width: 18, color: t.textMuted, fontSize: 13, textAlign: "center", flexShrink: 0 }}>{index + 1}</span>
-          <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => e.target.select()} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
+          <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
           <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
-          <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => e.target.select()} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
+          <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
           {/* RPE chip */}
           <button
             onClick={() => { setShowRpe(v => !v); haptic(8); }}
@@ -2150,6 +2185,15 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
   // mounts in its new position with no visual continuity. The 380ms gives the eye a
   // chance to track the transition.
   const [isFinishing, setIsFinishing] = useState(false);
+  // Smart-timer Add Set prompt (Fix #217 follow-up). Lifted above the early returns to
+  // satisfy rules-of-hooks. Auto-dismisses to "keep going" after 6s — that is the less
+  // destructive option since resetting a running timer is irreversible.
+  const [showAddSetPrompt, setShowAddSetPrompt] = useState(false);
+  useEffect(() => {
+    if (!showAddSetPrompt) return;
+    const id = setTimeout(() => setShowAddSetPrompt(false), 6000);
+    return () => clearTimeout(id);
+  }, [showAddSetPrompt]);
 
   // "Done Exercise" — collapsed pill view when exercise.done is truthy.
   // Entrance animation (bl-done-in keyframes injected globally) slides the pill down from
@@ -2208,18 +2252,29 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
     // the haptic/ding/auto-start; that creates noise and resets the timer prematurely.
     const lastComplete = last && last.weight && last.reps;
     if (lastComplete) {
-      // Set committed — haptic confirm + sound ding (Fix #76 + #77).
-      // Fix #217: rest timer auto-start is opt-in via Settings → Workout Preferences.
-      // Default is manual: user taps Start on the timer when ready to rest. The
-      // gt-start-timer handler in RestTimer always resets endsAt to full duration,
-      // satisfying the "set completes mid-rest → reset" edge case.
+      // Set committed — haptic confirm + sound ding.
       haptic([0, 30, 20, 30]);
       playDing();
+      // Fix #217 smart-timer behavior:
+      //   - autoStartRest OFF → user is in manual mode, do nothing
+      //   - autoStartRest ON, timer not active → start fresh (they just finished a set)
+      //   - autoStartRest ON, timer already active → ask the user. They might have just
+      //     finished another set (= reset) or might still be resting from before and just
+      //     finished logging during that rest (= keep going).
       if (autoStartRest) {
-        window.dispatchEvent(new Event("gt-start-timer"));
+        const timerActive = !!(typeof window !== "undefined" && window.__bl_timerActive);
+        if (timerActive) {
+          setShowAddSetPrompt(true);
+        } else {
+          window.dispatchEvent(new Event("gt-start-timer"));
+        }
       }
     } else { haptic(10); }
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
+  };
+  const handleFirstFocusOnEmpty = () => {
+    if (!autoStartRest) return;
+    window.dispatchEvent(new Event("gt-start-timer-if-idle"));
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   // Fix #105: set delete is low-stakes (single set's data) but high-frequency, so just an
@@ -2308,9 +2363,30 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
       )}
 
       <div style={{ marginBottom: 8 }}>
-        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} />)}
+        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
+      {/* Smart-timer Add Set prompt (Fix #217 follow-up) — only renders when autoStartRest
+          is ON and the timer is already running when the user taps Add Set. Lets the user
+          disambiguate "I just finished another set, reset the timer" vs "I'm still resting
+          from before and just finished logging it, keep going". Auto-dismisses to "keep
+          going" after 6s. */}
+      {showAddSetPrompt && (
+        <div style={{ marginTop: 10, background: t.surfaceHigh, border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: "12px 14px", animation: "bl-card-in 0.32s cubic-bezier(0.16,1,0.3,1) both" }}>
+          <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 2 }}>Did you just finish another set?</div>
+          <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 10, lineHeight: 1.4 }}>The timer is already running. Reset it to start a fresh rest, or keep it going if you were just logging.</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => { window.dispatchEvent(new Event("gt-start-timer")); setShowAddSetPrompt(false); }}
+              style={{ flex: 1, background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
+            >Yes, reset</button>
+            <button
+              onClick={() => setShowAddSetPrompt(false)}
+              style={{ flex: 1, background: "transparent", color: t.textSub, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
+            >Keep going</button>
+          </div>
+        </div>
+      )}
       {/* Fix #106: Notes — collapsed pill when content exists and not focused; full textarea when expanded. */}
       {(() => {
         const noteText = exercise.note || "";
