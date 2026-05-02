@@ -2004,7 +2004,7 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
   const rir = set.rir != null ? parseFloat(set.rir) : (rpe != null ? Math.round(10 - rpe) : null);
   const hasRpe = rpe != null;
 
-  // Fix #106: auto-collapse RPE panel ~1.8s after the last value change so the row stays
+  // Fix #106: auto-collapse RPE panel ~3.8s after the last value change so the row stays
   // compact once the user has logged effort. Each rpe/rir change restarts the timer, so
   // continuous adjustments keep the panel open. Initial open with no value yet stays
   // open until the user picks something. Tapping the chip still manually toggles. Future
@@ -2013,7 +2013,7 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
   useEffect(() => {
     if (!showRpe) return;
     if (rpe == null && rir == null) return;
-    const id = setTimeout(() => setShowRpe(false), 1800);
+    const id = setTimeout(() => setShowRpe(false), 3800);
     return () => clearTimeout(id);
   }, [showRpe, set.rpe, set.rir]); // eslint-disable-line react-hooks/exhaustive-deps
   // Fix #82: respect user's preferred effort metric for the chip label
@@ -2048,9 +2048,13 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
               color: hasChip ? toneColor : t.textMuted, cursor: "pointer",
               whiteSpace: "nowrap", flexShrink: 0, minHeight: 44, touchAction: "manipulation",
               transition: "all 0.15s",
+              display: "inline-flex", alignItems: "center", gap: 4,
             }}
           >
-            {chipLabel}
+            <span>{chipLabel}</span>
+            <span style={{ display: "inline-flex", transition: "transform 0.2s", transform: showRpe ? "rotate(180deg)" : "rotate(0deg)", opacity: 0.7 }}>
+              <Icon name="chevronDown" size={11} />
+            </span>
           </button>
           <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 32, height: 36, minWidth: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, marginLeft: "auto", touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
         </div>
