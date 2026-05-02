@@ -5533,8 +5533,10 @@ export default function App() {
                       setCurrentExerciseIdx(null);
                       // If everything is now done and there's no queued exercise to flow into,
                       // auto-open the picker so the user can add another one. No keyboard pop.
+                      // Delay so the user visually registers the exercise becoming Done before
+                      // the picker takes over the screen — prevents the eye-jump.
                       const allDone = exercises.every(e => e.done);
-                      if (allDone) { setShowExPicker(true); }
+                      if (allDone) { setTimeout(() => setShowExPicker(true), 700); }
                     }
                   }}
                   onRemove={() => requestRemoveExercise(i)}
@@ -5544,7 +5546,7 @@ export default function App() {
           })()}
 
           {showExPicker && (
-            <div style={S.card()}>
+            <div style={{ ...S.card(), animation: "bl-card-in 0.4s cubic-bezier(0.16,1,0.3,1) both" }}>
               {/* Top-of-picker Finish button — lets the user wrap up without closing search first.
                   Always green to match 'Done with this exercise'. Only when workout has exercises. */}
               {workout && workout.exercises.length > 0 && (
