@@ -990,6 +990,13 @@ function RestTimer() {
   const doneFiredRef = useRef(false); // ensures the "rest done" haptic/sound fires exactly once per timer
 
   const running = endsAt !== null;
+  // Broadcast timer "active" state on a window global so ExerciseBlock's Add Set handler
+  // can decide between silent reset (timer idle/done) and prompting (timer running).
+  // Active = running or paused — done is not active.
+  useEffect(() => {
+    try { window.__bl_timerActive = (endsAt !== null) || (pausedRemaining != null); } catch {}
+    return () => { try { window.__bl_timerActive = false; } catch {} };
+  }, [endsAt, pausedRemaining]);
   const remaining = running
     ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
     : (pausedRemaining ?? seconds);
@@ -1060,8 +1067,9 @@ function RestTimer() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  // External "gt-start-timer" event support (used by per-set buttons). Always starts fresh
-  // from the current preset duration.
+  // External "gt-start-timer" event — always resets to full duration.
+  // Used when the user explicitly confirms "I just finished a set" (✓ tap or
+  // Add Set "Yes, reset"), or when Add Set fires silently because the timer is idle.
   useEffect(() => {
     const handler = () => {
       setEndsAt(Date.now() + seconds * 1000);
@@ -1073,6 +1081,23 @@ function RestTimer() {
     window.addEventListener("gt-start-timer", handler);
     return () => window.removeEventListener("gt-start-timer", handler);
   }, [seconds]); // eslint-disable-line
+
+  // External "gt-start-timer-if-idle" event — only starts if not running/paused. "done"
+  // counts as idle (previous rest cycle is over). Used by focus-to-start so tapping into
+  // an empty set's input naturally kicks off the timer at the start of an exercise, but
+  // doesn't disrupt an already-running rest.
+  useEffect(() => {
+    const handler = () => {
+      if (endsAt !== null || pausedRemaining != null) return;
+      setEndsAt(Date.now() + seconds * 1000);
+      setDone(false);
+      doneFiredRef.current = false;
+      haptic(10); scheduleNotif(seconds);
+    };
+    window.addEventListener("gt-start-timer-if-idle", handler);
+    return () => window.removeEventListener("gt-start-timer-if-idle", handler);
+  }, [seconds, endsAt, pausedRemaining]); // eslint-disable-line
+
 
   const applyCustom = () => {
     const m = parseInt(customMin) || 0;
@@ -1129,7 +1154,13 @@ function RestTimer() {
           <button onClick={isPaused ? resume : start} style={{ background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>{isPaused ? "Resume" : "Start"}</button>
         )}
         {running && (
-          <button onClick={pause} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
+          <>
+            <button onClick={pause} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
+            <button onClick={stop} aria-label="Reset rest timer" style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
+          </>
+        )}
+        {!running && isPaused && (
+          <button onClick={stop} aria-label="Reset rest timer" style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
         )}
         {done && (
           <button onClick={stop} style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
@@ -1997,9 +2028,30 @@ function Big3PRs({ workouts, profile, onSave, onLogExercise }) {
 }
 
 // ── Set Row ───────────────────────────────────────────────────────────
-function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
+function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstFocus, onMarkDone }) {
   const t = useT(); const S = useS();
   const [showRpe, setShowRpe] = useState(false);
+  // Focus-to-start fires once per set-row lifecycle when the user taps any input on
+  // any set (empty or pre-filled). Signals the parent to kick the rest timer if it's
+  // idle. Captures the "user just walked back from lifting" moment regardless of
+  // whether the row was a fresh empty fill, a pre-loaded template entry, or an edit
+  // of a previously-logged value. Tabbing through fields on the same row only fires
+  // once. The parent's handler uses gt-start-timer-if-idle, so a running timer is
+  // never disrupted (preload-during-rest stays safe).
+  const firstFocusFiredRef = useRef(false);
+  const handleFirstFocus = () => {
+    if (firstFocusFiredRef.current) return;
+    firstFocusFiredRef.current = true;
+    onFirstFocus?.();
+  };
+  // Per-set ✓ toggle. Universal explicit "I just finished this" signal — works for
+  // every workflow (empty / template / edited). Always resets timer to full.
+  const toggleDone = () => {
+    const goingDone = !set.done;
+    onChange({ ...set, done: goingDone });
+    haptic(goingDone ? [0, 30, 20, 30] : 8);
+    if (goingDone) onMarkDone?.();
+  };
   const rpe = set.rpe != null ? parseFloat(set.rpe) : null;
   const rir = set.rir != null ? parseFloat(set.rir) : (rpe != null ? Math.round(10 - rpe) : null);
   const hasRpe = rpe != null;
@@ -2035,9 +2087,9 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
       <SwipeableRow flat onDelete={onRemove} bgColor={t.surfaceHigh}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ width: 18, color: t.textMuted, fontSize: 13, textAlign: "center", flexShrink: 0 }}>{index + 1}</span>
-          <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => e.target.select()} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
+          <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
           <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
-          <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => e.target.select()} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
+          <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
           {/* RPE chip */}
           <button
             onClick={() => { setShowRpe(v => !v); haptic(8); }}
@@ -2056,7 +2108,25 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
               <Icon name="chevronDown" size={11} />
             </span>
           </button>
-          <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 32, height: 36, minWidth: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, marginLeft: "auto", touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
+          <button
+            onClick={toggleDone}
+            aria-label={set.done ? "Mark set incomplete" : "Mark set complete"}
+            aria-pressed={!!set.done}
+            style={{
+              background: set.done ? "#5bb85b" : "transparent",
+              border: `1.5px solid ${set.done ? "#5bb85b" : t.border}`,
+              color: set.done ? "#fff" : t.textMuted,
+              cursor: "pointer",
+              width: 32, height: 32, minWidth: 32, padding: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              borderRadius: 8, flexShrink: 0, marginLeft: "auto",
+              touchAction: "manipulation",
+              transition: "background 0.15s, border-color 0.15s, color 0.15s",
+            }}
+          >
+            <Icon name="check" size={14} />
+          </button>
+          <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 28, height: 36, minWidth: 28, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
         </div>
       </SwipeableRow>
 
@@ -2117,7 +2187,7 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
 }
 
 // ── Exercise Block ────────────────────────────────────────────────────
-function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, mode = "active", onFocus, queueIndex, triggerUndo }) {
+function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, autoStartRest = false, mode = "active", onFocus, queueIndex, triggerUndo }) {
   const S = useS();
   const t = useT();
   const [coachDismissed, setCoachDismissed] = useState(false);
@@ -2133,6 +2203,15 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   // mounts in its new position with no visual continuity. The 380ms gives the eye a
   // chance to track the transition.
   const [isFinishing, setIsFinishing] = useState(false);
+  // Add Set "Just finished?" prompt — only renders for the genuinely ambiguous case:
+  // user tapped Add Set with last set complete + ✓ NOT used yet + timer already running.
+  // Auto-dismisses to "No, still resting" after 6s (less destructive default).
+  const [showAddSetPrompt, setShowAddSetPrompt] = useState(false);
+  useEffect(() => {
+    if (!showAddSetPrompt) return;
+    const id = setTimeout(() => setShowAddSetPrompt(false), 6000);
+    return () => clearTimeout(id);
+  }, [showAddSetPrompt]);
 
   // "Done Exercise" — collapsed pill view when exercise.done is truthy.
   // Entrance animation (bl-done-in keyframes injected globally) slides the pill down from
@@ -2184,15 +2263,45 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
     );
   }
 
+  // Add Set is intentionally smart so users with different logging styles all work:
+  //   1. Preload mid-rest → user is filling next row while timer runs → don't reset
+  //   2. Prep an empty row to walk away → silent reset (timer was idle/done)
+  //   3. Wait → lift → Add Set → silent reset (timer expired or never started)
+  //   4. ✓-using user → set.done already true → skip everything; ✓ already handled it
+  // The prompt is the disambiguator for case 1 vs cases 2-3 when the timer is running
+  // and ✓ wasn't used. Auto-dismisses to "No, still resting".
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1];
-    if (last && (last.weight || last.reps)) {
-      // Set committed — haptic confirm, sound ding (Fix #76 + #77), then start rest timer
+    const lastComplete = last && last.weight && last.reps;
+    const lastMarkedDone = !!(last && last.done);
+    if (lastComplete) {
       haptic([0, 30, 20, 30]);
       playDing();
-      window.dispatchEvent(new Event("gt-start-timer"));
+      if (autoStartRest && !lastMarkedDone) {
+        const timerActive = !!(typeof window !== "undefined" && window.__bl_timerActive);
+        if (timerActive) {
+          setShowAddSetPrompt(true);
+        } else {
+          window.dispatchEvent(new Event("gt-start-timer"));
+        }
+      }
     } else { haptic(10); }
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
+  };
+  // Focus-to-start trigger — fires when user taps a fresh empty set's input.
+  // Uses if-idle so it never disrupts a running timer (preload mid-rest is safe).
+  const handleFirstFocusOnEmpty = () => {
+    if (!autoStartRest) return;
+    window.dispatchEvent(new Event("gt-start-timer-if-idle"));
+  };
+  // Explicit per-set "I just finished this" signal. Uses if-idle so tapping ✓ during
+  // an already-running rest cycle doesn't lose elapsed seconds — preserves accurate
+  // 1:30-from-walk-back timing across every workflow. The Add Set prompt's "Yes, reset"
+  // is the only auto path that force-resets a running timer.
+  const handleSetMarkedDone = () => {
+    playDing();
+    if (!autoStartRest) return;
+    window.dispatchEvent(new Event("gt-start-timer-if-idle"));
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
   // Fix #105: set delete is low-stakes (single set's data) but high-frequency, so just an
@@ -2281,9 +2390,27 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
       )}
 
       <div style={{ marginBottom: 8 }}>
-        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} />)}
+        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} onMarkDone={handleSetMarkedDone} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
+      {/* "Just finished?" prompt — only the genuinely ambiguous case: timer running +
+          last set complete + ✓ not used. Tapping ✓ in the future skips this entirely. */}
+      {showAddSetPrompt && (
+        <div style={{ marginTop: 10, background: t.surfaceHigh, border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: "12px 14px", animation: "bl-card-in 0.32s cubic-bezier(0.16,1,0.3,1) both" }}>
+          <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 2 }}>Did you just finish another set?</div>
+          <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 10, lineHeight: 1.4 }}>The timer is already running. Tip: tap the ✓ next to a set to skip this prompt.</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => { window.dispatchEvent(new Event("gt-start-timer")); setShowAddSetPrompt(false); }}
+              style={{ flex: 1, background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
+            >Yes, reset</button>
+            <button
+              onClick={() => setShowAddSetPrompt(false)}
+              style={{ flex: 1, background: "transparent", color: t.textSub, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
+            >No, still resting</button>
+          </div>
+        </div>
+      )}
       {/* Fix #106: Notes — collapsed pill when content exists and not focused; full textarea when expanded. */}
       {(() => {
         const noteText = exercise.note || "";
@@ -2807,7 +2934,139 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON, consentActive, onWithdrawConsent }) {
+// Fix #217: Workout Preferences sub-panel — stacks above Settings (z 950 vs 900) so the
+// user can flick back to Settings via the back arrow without losing context. Houses the
+// new Auto-start Rest Timer toggle plus the existing prefs (1RM formula, effort metric,
+// sound, units) that were previously inline in Settings. Future toggles (default rest
+// duration, auto-progression, default RPE prompt, etc.) drop in here without rework.
+function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
+  const t = useT();
+  const accent = "#5B9BD5";
+  const cardStyle = { background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 };
+  const labelStyle = { fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 4 };
+  const subStyle = { fontSize: 10, color: t.textMuted, marginBottom: 8 };
+  return (
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 950, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}
+      onClick={onClose}>
+      {/* Backdrop */}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+      {/* Sheet */}
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
+        {/* Handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border }} />
+        </div>
+        {/* Header — back arrow returns to Settings */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 16, borderBottom: `1px solid ${t.border}`, marginBottom: 16 }}>
+          <button onClick={onClose} aria-label="Back to Settings" style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted, transform: "rotate(180deg)" }}>
+            <Icon name="chevronRight" size={14} />
+          </button>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1 }}>
+            <span style={{ color: accent }}>Workout Preferences</span>
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        {/* Intro */}
+        <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+          Tweak how the app behaves during a workout. Changes save instantly and sync across your devices.
+        </div>
+
+        {/* Rest Timer section */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 8 }}>Rest Timer</div>
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Smart rest timer</div>
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>When ON, the first thing you do after the timer is idle (tap a set's input, tap ✓, or hit Add Set) starts it — and once it's running, later actions don't reset it. Add Set with timer running asks "just finished?" so preloading mid-rest is safe. Off keeps it fully manual.</div>
+            </div>
+            <button
+              onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest })}
+              style={{ background: workoutPrefs?.autoStartRest ? accent : t.surface, border: `1px solid ${workoutPrefs?.autoStartRest ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.autoStartRest ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0, minHeight: 28 }}
+              aria-pressed={!!workoutPrefs?.autoStartRest}
+            >
+              {workoutPrefs?.autoStartRest ? "ON" : "OFF"}
+            </button>
+          </div>
+        </div>
+
+        {/* Calculations section */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, margin: "16px 0 8px" }}>Calculations</div>
+        <div style={cardStyle}>
+          <div style={labelStyle}>1RM Formula</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {[
+              { id: "avg",     label: "Both (avg)", sub: "Epley + Brzycki" },
+              { id: "epley",   label: "Epley",      sub: "w × (1 + r/30)" },
+              { id: "brzycki", label: "Brzycki",    sub: "w × 36/(37-r)" },
+            ].map(opt => {
+              const active = (workoutPrefs?.oneRMFormula || "avg") === opt.id;
+              return (
+                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), oneRMFormula: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "8px 6px", fontSize: 11, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, touchAction: "manipulation" }}>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.8, fontFamily: "'Space Mono', monospace" }}>{opt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={cardStyle}>
+          <div style={labelStyle}>Effort Metric</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { id: "rpe", label: "RPE",  sub: "Rate of Perceived Exertion (6–10)" },
+              { id: "rir", label: "RIR",  sub: "Reps in Reserve (0–5)" },
+            ].map(opt => {
+              const active = (workoutPrefs?.effortMetric || "rpe") === opt.id;
+              return (
+                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Audio + Units section */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, margin: "16px 0 8px" }}>Audio &amp; Units</div>
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600 }}>Sound effects</div>
+              <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>Subtle tones on set complete, rest timer end, PR unlock.</div>
+            </div>
+            <button onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound })} style={{ background: workoutPrefs?.sound ? accent : t.surface, border: `1px solid ${workoutPrefs?.sound ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.sound ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0 }}>
+              {workoutPrefs?.sound ? "ON" : "OFF"}
+            </button>
+          </div>
+        </div>
+        <div style={cardStyle}>
+          <div style={labelStyle}>Units</div>
+          <div style={subStyle}>Affects how new entries are labeled. Existing data isn't auto-converted yet.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { id: "imperial", label: "Imperial", sub: "lbs / inches" },
+              { id: "metric",   label: "Metric",   sub: "kg / cm" },
+            ].map(opt => {
+              const active = (workoutPrefs?.units || "imperial") === opt.id;
+              return (
+                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onOpenWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON, consentActive, onWithdrawConsent }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2879,76 +3138,21 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
             <div style={{ fontSize: 10, color: t.textMuted, marginTop: 6, textAlign: "center" }}>Following your device setting — currently {theme}.</div>
           )}
         </div>
-        {/* Fix #81/#82: Workout Preferences */}
-        {onWorkoutPrefs && (
+        {/* Fix #217: Workout Preferences moved into a dedicated sub-panel.
+            Was previously an inline section here (1RM, Effort, Sound, Units). Migrated
+            so the new Auto-start Rest Timer toggle has a coherent home alongside the
+            existing prefs, and so future toggles can be added without bloating this
+            top-level Settings sheet. */}
+        {onOpenWorkoutPrefs && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Workout Preferences</div>
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 8 }}>1RM Formula</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "avg",     label: "Both (avg)", sub: "Epley + Brzycki" },
-                  { id: "epley",   label: "Epley",      sub: "w × (1 + r/30)" },
-                  { id: "brzycki", label: "Brzycki",    sub: "w × 36/(37-r)" },
-                ].map(opt => {
-                  const active = (workoutPrefs?.oneRMFormula || "avg") === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), oneRMFormula: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "8px 6px", fontSize: 11, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, touchAction: "manipulation" }}>
-                      <span>{opt.label}</span>
-                      <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.8, fontFamily: "'Space Mono', monospace" }}>{opt.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 8 }}>Effort Metric</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "rpe", label: "RPE",  sub: "Rate of Perceived Exertion (6–10)" },
-                  { id: "rir", label: "RIR",  sub: "Reps in Reserve (0–5)" },
-                ].map(opt => {
-                  const active = (workoutPrefs?.effortMetric || "rpe") === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
-                      <span>{opt.label}</span>
-                      <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {/* Fix #77: Sound effects toggle */}
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600 }}>Sound effects</div>
-                  <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>Subtle tones on set complete, rest timer end, PR unlock.</div>
-                </div>
-                <button onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound })} style={{ background: workoutPrefs?.sound ? accent : t.surface, border: `1px solid ${workoutPrefs?.sound ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.sound ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0 }}>
-                  {workoutPrefs?.sound ? "ON" : "OFF"}
-                </button>
-              </div>
-            </div>
-            {/* Fix #46: Units preference (display-only for now; full conversion is a separate task) */}
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
-              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 4 }}>Units</div>
-              <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 8 }}>Affects how new entries are labeled. Existing data isn't auto-converted yet.</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "imperial", label: "Imperial", sub: "lbs / inches" },
-                  { id: "metric",   label: "Metric",   sub: "kg / cm" },
-                ].map(opt => {
-                  const active = (workoutPrefs?.units || "imperial") === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
-                      <span>{opt.label}</span>
-                      <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Workout</div>
+            <button onClick={onOpenWorkoutPrefs} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                <Icon name="dumbbell" size={16} />
+                Workout Preferences
+              </span>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
           </div>
         )}
         {/* Email verification */}
@@ -4790,6 +4994,9 @@ export default function App() {
   const [helpPage, setHelpPage] = useState(null);
   const [showPlateCalc, setShowPlateCalc] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // Fix #217: Workout Preferences sub-panel — stacks above showSettings so back-arrow
+  // returns to Settings naturally without re-opening it.
+  const [showWorkoutPrefs, setShowWorkoutPrefs] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [show1RM, setShow1RM] = useState(false);
@@ -5547,6 +5754,7 @@ export default function App() {
                   onFocus={() => setCurrentExerciseIdx(i)}
                   triggerUndo={triggerUndo}
                   effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
+                  autoStartRest={!!(data.workoutPrefs && data.workoutPrefs.autoStartRest)}
                   onChange={updated => {
                     const exercises = [...workout.exercises];
                     exercises[i] = updated;
@@ -6262,6 +6470,11 @@ export default function App() {
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} formula={(data.workoutPrefs && data.workoutPrefs.oneRMFormula) || "avg"} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
+      {showWorkoutPrefs && <WorkoutPreferencesPanel
+        workoutPrefs={data.workoutPrefs || {}}
+        onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
+        onClose={() => setShowWorkoutPrefs(false)}
+      />}
       {showSettings && <SettingsModal
         onClose={() => setShowSettings(false)}
         themePref={themePref}
@@ -6271,6 +6484,7 @@ export default function App() {
         onExport={() => { setShowSettings(false); exportCSV(); }}
         workoutPrefs={data.workoutPrefs || {}}
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
+        onOpenWorkoutPrefs={() => setShowWorkoutPrefs(true)}
         onDeleteAccount={() => { setShowSettings(false); setShowDeleteAccount(true); }}
         consentActive={!!(readLocalConsent() || data?.privacyConsent?.acceptedAt)}
         onWithdrawConsent={() => { withdrawConsent({ data, save }); setShowSettings(false); }}

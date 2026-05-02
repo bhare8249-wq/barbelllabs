@@ -24,7 +24,8 @@ export const HELP_CONTENT = {
       { heading: "Log Your Sets", body: "Enter weight and reps, tap '+ Add Set' for more. Swipe left on a set row or tap the ✕ to delete it. Tap the RPE chip to rate effort (6–10) and set Reps in Reserve." },
       { heading: "AI Coach", body: "Each exercise shows a Coach card with a target based on your history. Tap 'Apply' to pre-fill the suggestion, or dismiss it." },
       { heading: "Tools ⋯", body: "The ⋯ icon in the top-right opens Tools: 1RM Calculator and Plate Calculator." },
-      { heading: "Rest Timer", body: "Pick a preset (30s–3m) or a custom time and tap Start. The ring turns green when rest is done." },
+      { heading: "Rest Timer", body: "Pick a preset (30s–3m) or custom time. Manual by default — tap Start when ready, Pause/Reset on the timer, or just ignore it. The ring turns green when rest is done." },
+      { heading: "Smart Rest Timer", body: "Optional master switch in Settings → Workout Preferences. When ON, one rule covers every workflow: the FIRST signal after the timer goes idle starts it; later signals don't reset it. Signals are tap-an-input, tap-✓, or Add-Set-after-complete. The only force-reset is your manual Reset button or the 'Yes, reset' button on the Add Set prompt (which only appears when you Add Set with the timer already running, since that's the one ambiguous case — finished a set vs preloading next row). Off keeps the timer fully manual for users who don't want it in their flow." },
     ],
   },
   history: {
