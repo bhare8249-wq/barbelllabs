@@ -24,8 +24,8 @@ export const HELP_CONTENT = {
       { heading: "Log Your Sets", body: "Enter weight and reps, tap '+ Add Set' for more. Swipe left on a set row or tap the ✕ to delete it. Tap the RPE chip to rate effort (6–10) and set Reps in Reserve." },
       { heading: "AI Coach", body: "Each exercise shows a Coach card with a target based on your history. Tap 'Apply' to pre-fill the suggestion, or dismiss it." },
       { heading: "Tools ⋯", body: "The ⋯ icon in the top-right opens Tools: 1RM Calculator and Plate Calculator." },
-      { heading: "Rest Timer", body: "By default the timer is manual — pick a preset (30s–3m) or a custom time and tap Start when you're ready to rest. The ring turns green when rest is done. Want it automatic? Settings → Workout Preferences → 'Auto-start rest timer when set is marked done'. With that on, tapping the ✓ on any set kicks off the timer." },
-      { heading: "Mark a Set Done (✓)", body: "Tap the green ✓ on the right side of any set row to mark it complete. Works the same whether you typed the values, loaded them from a template, or edited an old set — the explicit tap is what counts. If auto-start rest is on, ✓ also starts the timer." },
+      { heading: "Rest Timer", body: "Pick a preset (30s–3m) or custom time. Manual by default — tap Start when ready. Want it automatic? Settings → Workout Preferences → enable auto-start. The ring turns green when rest is done." },
+      { heading: "Auto-start triggers (when enabled)", body: "Three signals can start the timer so any logging style works: (1) tap the ✓ on a set to mark it done — works for empty rows, pre-filled templates, or edited values; (2) tap into a fresh empty set's weight/reps and the timer kicks if it's idle; (3) tap Add Set after a complete set — silent reset if the timer's not running, prompts 'just finished?' if it is so preloading mid-rest doesn't lose your timer." },
     ],
   },
   history: {
