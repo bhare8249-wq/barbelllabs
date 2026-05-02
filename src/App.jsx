@@ -964,7 +964,7 @@ function HelpBtn({ page, onOpen }) {
 }
 
 // ── Rest Timer ────────────────────────────────────────────────────────
-function RestTimer() {
+function RestTimer({ autoStartRest = false }) {
   const t = useT(); const S = useS();
   const PRESETS = [30, 60, 90, 120, 180];
   // Fix #80: timestamp-based timer. endsAt is the wall-clock time the timer should fire.
@@ -1116,8 +1116,13 @@ function RestTimer() {
   if (!expanded) {
     const dotColor = done ? "#5bb85b" : running ? accent : t.textMuted;
     const isPaused = pausedRemaining != null;
+    // Inline hint that explains the auto-start trigger. Only shown when auto-start is
+    // enabled AND the timer is idle (not running, not paused, not done) — once the timer
+    // is in flight the user already knows what triggered it.
+    const showAutoHint = autoStartRest && !running && !done && !isPaused;
     return (
-      <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ marginBottom: 14 }}>
+      <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: showAutoHint ? 4 : 0, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, animation: running ? "bl-card-in 1s ease-in-out infinite alternate" : "none" }} />
         <span style={{ fontSize: 11, fontWeight: 700, color: t.textMuted, letterSpacing: 0.6, textTransform: "uppercase" }}>Rest</span>
         <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: done ? "#5bb85b" : (running ? t.text : t.textSub), lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
@@ -1129,7 +1134,13 @@ function RestTimer() {
           <button onClick={isPaused ? resume : start} style={{ background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>{isPaused ? "Resume" : "Start"}</button>
         )}
         {running && (
-          <button onClick={pause} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
+          <>
+            <button onClick={pause} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
+            <button onClick={stop} aria-label="Reset rest timer" style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
+          </>
+        )}
+        {!running && isPaused && (
+          <button onClick={stop} aria-label="Reset rest timer" style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
         )}
         {done && (
           <button onClick={stop} style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
@@ -1137,6 +1148,12 @@ function RestTimer() {
         <button onClick={() => setExpanded(true)} aria-label="Expand rest timer" style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name="chevronDown" size={14} />
         </button>
+      </div>
+      {showAutoHint && (
+        <div style={{ fontSize: 10, color: t.textMuted, paddingLeft: 14, lineHeight: 1.4 }}>
+          Auto-starts when you log a complete set (weight + reps).
+        </div>
+      )}
       </div>
     );
   }
@@ -2186,12 +2203,16 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
 
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1];
-    if (last && (last.weight || last.reps)) {
+    // A set is "complete" once both weight AND reps are filled. RPE/RIR remain optional.
+    // Tighter than the previous "weight OR reps" check — half-filled sets shouldn't trigger
+    // the haptic/ding/auto-start; that creates noise and resets the timer prematurely.
+    const lastComplete = last && last.weight && last.reps;
+    if (lastComplete) {
       // Set committed — haptic confirm + sound ding (Fix #76 + #77).
-      // Fix #217: rest timer auto-start is now opt-in via Settings → Workout Preferences.
-      // Default behavior is manual: the user taps Start on the timer when ready to rest.
-      // The auto-start handler in RestTimer (gt-start-timer) resets to full duration,
-      // satisfying the "set completes mid-rest → reset" edge case from the spec.
+      // Fix #217: rest timer auto-start is opt-in via Settings → Workout Preferences.
+      // Default is manual: user taps Start on the timer when ready to rest. The
+      // gt-start-timer handler in RestTimer always resets endsAt to full duration,
+      // satisfying the "set completes mid-rest → reset" edge case.
       haptic([0, 30, 20, 30]);
       playDing();
       if (autoStartRest) {
@@ -5506,7 +5527,7 @@ export default function App() {
 
           {/* Tag editor moved out of Log — auto-suggested on Finish, editable from History */}
 
-          <RestTimer />
+          <RestTimer autoStartRest={!!(data.workoutPrefs && data.workoutPrefs.autoStartRest)} />
 
           {/* Finish Workout — top placement. Compact while logging, big green when all exercises done.
               Banner persists when picker opens so the "everything's done" celebration stays in view —
