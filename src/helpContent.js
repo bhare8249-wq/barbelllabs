@@ -24,7 +24,8 @@ export const HELP_CONTENT = {
       { heading: "Log Your Sets", body: "Enter weight and reps, tap '+ Add Set' for more. Swipe left on a set row or tap the ✕ to delete it. Tap the RPE chip to rate effort (6–10) and set Reps in Reserve." },
       { heading: "AI Coach", body: "Each exercise shows a Coach card with a target based on your history. Tap 'Apply' to pre-fill the suggestion, or dismiss it." },
       { heading: "Tools ⋯", body: "The ⋯ icon in the top-right opens Tools: 1RM Calculator and Plate Calculator." },
-      { heading: "Rest Timer", body: "By default the timer is manual — pick a preset (30s–3m) or a custom time and tap Start when you're ready to rest. The ring turns green when rest is done. Prefer the timer to start automatically the moment you complete a set? Settings → Workout Preferences → 'Auto-start rest timer after each set'." },
+      { heading: "Rest Timer", body: "By default the timer is manual — pick a preset (30s–3m) or a custom time and tap Start when you're ready to rest. The ring turns green when rest is done. Want it automatic? Settings → Workout Preferences → 'Auto-start rest timer when set is marked done'. With that on, tapping the ✓ on any set kicks off the timer." },
+      { heading: "Mark a Set Done (✓)", body: "Tap the green ✓ on the right side of any set row to mark it complete. Works the same whether you typed the values, loaded them from a template, or edited an old set — the explicit tap is what counts. If auto-start rest is on, ✓ also starts the timer." },
     ],
   },
   history: {

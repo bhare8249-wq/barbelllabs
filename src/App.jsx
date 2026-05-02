@@ -964,7 +964,7 @@ function HelpBtn({ page, onOpen }) {
 }
 
 // ── Rest Timer ────────────────────────────────────────────────────────
-function RestTimer({ autoStartRest = false }) {
+function RestTimer() {
   const t = useT(); const S = useS();
   const PRESETS = [30, 60, 90, 120, 180];
   // Fix #80: timestamp-based timer. endsAt is the wall-clock time the timer should fire.
@@ -990,14 +990,6 @@ function RestTimer({ autoStartRest = false }) {
   const doneFiredRef = useRef(false); // ensures the "rest done" haptic/sound fires exactly once per timer
 
   const running = endsAt !== null;
-  // Broadcast timer "active" state on a window global so other components (notably
-  // ExerciseBlock's Add Set handler) can decide whether to prompt the user about
-  // resetting the timer vs starting a fresh one. Active = running or paused — done is
-  // not active. Cheap polling read is preferable to lifting state into App for now.
-  useEffect(() => {
-    try { window.__bl_timerActive = (endsAt !== null) || (pausedRemaining != null); } catch {}
-    return () => { try { window.__bl_timerActive = false; } catch {} };
-  }, [endsAt, pausedRemaining]);
   const remaining = running
     ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
     : (pausedRemaining ?? seconds);
@@ -1083,23 +1075,6 @@ function RestTimer({ autoStartRest = false }) {
     return () => window.removeEventListener("gt-start-timer", handler);
   }, [seconds]); // eslint-disable-line
 
-  // External "gt-start-timer-if-idle" event — starts the timer only if it isn't already
-  // running or paused. Used by the smart auto-start trigger (focus into an empty set's
-  // input) so we don't reset a running timer just because the user tabbed through fields,
-  // and so preloading next-set values during an active rest is invisible to the timer.
-  // "done" counts as idle here: a finished timer means the previous rest cycle is over,
-  // so starting to log a new set should kick off a fresh cycle.
-  useEffect(() => {
-    const handler = () => {
-      if (endsAt !== null || pausedRemaining != null) return;
-      setEndsAt(Date.now() + seconds * 1000);
-      setDone(false);
-      doneFiredRef.current = false;
-      haptic(10); scheduleNotif(seconds);
-    };
-    window.addEventListener("gt-start-timer-if-idle", handler);
-    return () => window.removeEventListener("gt-start-timer-if-idle", handler);
-  }, [seconds, endsAt, pausedRemaining]); // eslint-disable-line
 
   const applyCustom = () => {
     const m = parseInt(customMin) || 0;
@@ -1143,13 +1118,8 @@ function RestTimer({ autoStartRest = false }) {
   if (!expanded) {
     const dotColor = done ? "#5bb85b" : running ? accent : t.textMuted;
     const isPaused = pausedRemaining != null;
-    // Inline hint that explains the auto-start trigger. Only shown when auto-start is
-    // enabled AND the timer is idle (not running, not paused, not done) — once the timer
-    // is in flight the user already knows what triggered it.
-    const showAutoHint = autoStartRest && !running && !done && !isPaused;
     return (
-      <div style={{ marginBottom: 14 }}>
-      <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: showAutoHint ? 4 : 0, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, animation: running ? "bl-card-in 1s ease-in-out infinite alternate" : "none" }} />
         <span style={{ fontSize: 11, fontWeight: 700, color: t.textMuted, letterSpacing: 0.6, textTransform: "uppercase" }}>Rest</span>
         <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: done ? "#5bb85b" : (running ? t.text : t.textSub), lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
@@ -1175,12 +1145,6 @@ function RestTimer({ autoStartRest = false }) {
         <button onClick={() => setExpanded(true)} aria-label="Expand rest timer" style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name="chevronDown" size={14} />
         </button>
-      </div>
-      {showAutoHint && (
-        <div style={{ fontSize: 10, color: t.textMuted, paddingLeft: 14, lineHeight: 1.4 }}>
-          Auto-starts when you log a complete set (weight + reps).
-        </div>
-      )}
       </div>
     );
   }
@@ -2041,26 +2005,13 @@ function Big3PRs({ workouts, profile, onSave, onLogExercise }) {
 }
 
 // ── Set Row ───────────────────────────────────────────────────────────
-function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstFocus, onMarkDone }) {
+function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onMarkDone }) {
   const t = useT(); const S = useS();
   const [showRpe, setShowRpe] = useState(false);
-  // Smart-timer first-focus trigger — fires once per set-row lifecycle when the user
-  // taps into any input while the set is empty (no weight, no reps). Signals the parent
-  // that the user just finished the previous lift in real life and is now starting to
-  // log it; the parent uses this to start the rest timer if it isn't already running.
-  // Tabbing through fields on the same empty row only fires once.
-  const firstFocusFiredRef = useRef(false);
-  const handleFirstFocus = () => {
-    if (firstFocusFiredRef.current) return;
-    if (set.weight || set.reps) return;
-    firstFocusFiredRef.current = true;
-    onFirstFocus?.();
-  };
-  // Per-set ✓ toggle. Tapping marks the set as completed (and toggles back if tapped
-  // again). When transitioning false → true, the parent's onMarkDone fires so the rest
-  // timer can react regardless of whether the set was empty, pre-populated from a
-  // template, or edited. Works for every workflow (the focus-to-start trigger only
-  // covered the empty-and-fill flow).
+  // Per-set ✓ toggle is the single timer trigger when auto-start is ON. Tapping marks
+  // the set complete (set.done = true) and fires onMarkDone so the parent can start the
+  // rest timer. Works the same for empty sets the user is filling, sets pre-populated
+  // from a template, or edited sets — the explicit tap removes all ambiguity.
   const toggleDone = () => {
     const goingDone = !set.done;
     onChange({ ...set, done: goingDone });
@@ -2102,9 +2053,9 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
       <SwipeableRow flat onDelete={onRemove} bgColor={t.surfaceHigh}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ width: 18, color: t.textMuted, fontSize: 13, textAlign: "center", flexShrink: 0 }}>{index + 1}</span>
-          <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
+          <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => e.target.select()} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
           <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
-          <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
+          <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => e.target.select()} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
           {/* RPE chip */}
           <button
             onClick={() => { setShowRpe(v => !v); haptic(8); }}
@@ -2218,15 +2169,6 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
   // mounts in its new position with no visual continuity. The 380ms gives the eye a
   // chance to track the transition.
   const [isFinishing, setIsFinishing] = useState(false);
-  // Smart-timer Add Set prompt (Fix #217 follow-up). Lifted above the early returns to
-  // satisfy rules-of-hooks. Auto-dismisses to "keep going" after 6s — that is the less
-  // destructive option since resetting a running timer is irreversible.
-  const [showAddSetPrompt, setShowAddSetPrompt] = useState(false);
-  useEffect(() => {
-    if (!showAddSetPrompt) return;
-    const id = setTimeout(() => setShowAddSetPrompt(false), 6000);
-    return () => clearTimeout(id);
-  }, [showAddSetPrompt]);
 
   // "Done Exercise" — collapsed pill view when exercise.done is truthy.
   // Entrance animation (bl-done-in keyframes injected globally) slides the pill down from
@@ -2278,40 +2220,15 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
     );
   }
 
+  // Add Set just adds an empty row — no timer logic. The rest timer is driven entirely
+  // by the per-set ✓ toggle (handleSetMarkedDone below) when auto-start is on.
   const addSet = () => {
-    const last = exercise.sets[exercise.sets.length - 1];
-    // A set is "complete" once both weight AND reps are filled. RPE/RIR remain optional.
-    // Tighter than the previous "weight OR reps" check — half-filled sets shouldn't trigger
-    // the haptic/ding/auto-start; that creates noise and resets the timer prematurely.
-    const lastComplete = last && last.weight && last.reps;
-    if (lastComplete) {
-      // Set committed — haptic confirm + sound ding.
-      haptic([0, 30, 20, 30]);
-      playDing();
-      // Fix #217 smart-timer behavior:
-      //   - autoStartRest OFF → user is in manual mode, do nothing
-      //   - autoStartRest ON, timer not active → start fresh (they just finished a set)
-      //   - autoStartRest ON, timer already active → ask the user. They might have just
-      //     finished another set (= reset) or might still be resting from before and just
-      //     finished logging during that rest (= keep going).
-      if (autoStartRest) {
-        const timerActive = !!(typeof window !== "undefined" && window.__bl_timerActive);
-        if (timerActive) {
-          setShowAddSetPrompt(true);
-        } else {
-          window.dispatchEvent(new Event("gt-start-timer"));
-        }
-      }
-    } else { haptic(10); }
+    haptic(10);
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
   };
-  const handleFirstFocusOnEmpty = () => {
-    if (!autoStartRest) return;
-    window.dispatchEvent(new Event("gt-start-timer-if-idle"));
-  };
-  // Explicit per-set "I just finished this" signal — works for empty, pre-filled
-  // (template / Repeat Last Session), and edited sets uniformly. Always resets the
-  // timer to full duration since the user explicitly tapped ✓; no prompt needed.
+  // Explicit per-set "I just finished this" signal. Works for every workflow uniformly:
+  // empty-and-fill, pre-populated from a template, edited values. Always resets the
+  // timer to full duration since the tap is an explicit user signal.
   const handleSetMarkedDone = () => {
     playDing();
     if (!autoStartRest) return;
@@ -2404,30 +2321,9 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
       )}
 
       <div style={{ marginBottom: 8 }}>
-        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} onMarkDone={handleSetMarkedDone} />)}
+        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onMarkDone={handleSetMarkedDone} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
-      {/* Smart-timer Add Set prompt (Fix #217 follow-up) — only renders when autoStartRest
-          is ON and the timer is already running when the user taps Add Set. Lets the user
-          disambiguate "I just finished another set, reset the timer" vs "I'm still resting
-          from before and just finished logging it, keep going". Auto-dismisses to "keep
-          going" after 6s. */}
-      {showAddSetPrompt && (
-        <div style={{ marginTop: 10, background: t.surfaceHigh, border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: "12px 14px", animation: "bl-card-in 0.32s cubic-bezier(0.16,1,0.3,1) both" }}>
-          <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 2 }}>Did you just finish another set?</div>
-          <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 10, lineHeight: 1.4 }}>The timer is already running. Reset it to start a fresh rest, or keep it going if you were just logging.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => { window.dispatchEvent(new Event("gt-start-timer")); setShowAddSetPrompt(false); }}
-              style={{ flex: 1, background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
-            >Yes, reset</button>
-            <button
-              onClick={() => setShowAddSetPrompt(false)}
-              style={{ flex: 1, background: "transparent", color: t.textSub, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
-            >No, still resting</button>
-          </div>
-        </div>
-      )}
       {/* Fix #106: Notes — collapsed pill when content exists and not focused; full textarea when expanded. */}
       {(() => {
         const noteText = exercise.note || "";
@@ -2996,8 +2892,8 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Auto-start rest timer after each set</div>
-              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>Timer begins automatically when you complete a set. Off by default — you start the timer manually when you're ready.</div>
+              <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Auto-start rest timer when set is marked done</div>
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>Tap the ✓ on a set to start the rest timer. Off by default — leaves the timer fully manual.</div>
             </div>
             <button
               onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest })}
@@ -5644,7 +5540,7 @@ export default function App() {
 
           {/* Tag editor moved out of Log — auto-suggested on Finish, editable from History */}
 
-          <RestTimer autoStartRest={!!(data.workoutPrefs && data.workoutPrefs.autoStartRest)} />
+          <RestTimer />
 
           {/* Finish Workout — top placement. Compact while logging, big green when all exercises done.
               Banner persists when picker opens so the "everything's done" celebration stays in view —
