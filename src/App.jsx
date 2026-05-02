@@ -1085,17 +1085,21 @@ function RestTimer({ autoStartRest = false }) {
 
   // External "gt-start-timer-if-idle" event — starts the timer only if it isn't already
   // running or paused. Used by the smart auto-start trigger (focus into an empty set's
-  // input) so we don't reset a running timer just because the user tabbed through fields.
+  // input) so we don't reset a running timer just because the user tabbed through fields,
+  // and so preloading next-set values during an active rest is invisible to the timer.
+  // "done" counts as idle here: a finished timer means the previous rest cycle is over,
+  // so starting to log a new set should kick off a fresh cycle.
   useEffect(() => {
     const handler = () => {
-      if (endsAt !== null || pausedRemaining != null || done) return;
+      if (endsAt !== null || pausedRemaining != null) return;
       setEndsAt(Date.now() + seconds * 1000);
+      setDone(false);
       doneFiredRef.current = false;
       haptic(10); scheduleNotif(seconds);
     };
     window.addEventListener("gt-start-timer-if-idle", handler);
     return () => window.removeEventListener("gt-start-timer-if-idle", handler);
-  }, [seconds, endsAt, pausedRemaining, done]); // eslint-disable-line
+  }, [seconds, endsAt, pausedRemaining]); // eslint-disable-line
 
   const applyCustom = () => {
     const m = parseInt(customMin) || 0;
@@ -2383,7 +2387,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
             <button
               onClick={() => setShowAddSetPrompt(false)}
               style={{ flex: 1, background: "transparent", color: t.textSub, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 40 }}
-            >Keep going</button>
+            >No, still resting</button>
           </div>
         </div>
       )}
