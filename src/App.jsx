@@ -2117,7 +2117,7 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe" }) {
 }
 
 // ── Exercise Block ────────────────────────────────────────────────────
-function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, mode = "active", onFocus, queueIndex, triggerUndo }) {
+function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, autoStartRest = false, mode = "active", onFocus, queueIndex, triggerUndo }) {
   const S = useS();
   const t = useT();
   const [coachDismissed, setCoachDismissed] = useState(false);
@@ -2187,10 +2187,16 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, m
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1];
     if (last && (last.weight || last.reps)) {
-      // Set committed — haptic confirm, sound ding (Fix #76 + #77), then start rest timer
+      // Set committed — haptic confirm + sound ding (Fix #76 + #77).
+      // Fix #217: rest timer auto-start is now opt-in via Settings → Workout Preferences.
+      // Default behavior is manual: the user taps Start on the timer when ready to rest.
+      // The auto-start handler in RestTimer (gt-start-timer) resets to full duration,
+      // satisfying the "set completes mid-rest → reset" edge case from the spec.
       haptic([0, 30, 20, 30]);
       playDing();
-      window.dispatchEvent(new Event("gt-start-timer"));
+      if (autoStartRest) {
+        window.dispatchEvent(new Event("gt-start-timer"));
+      }
     } else { haptic(10); }
     onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
   };
@@ -2807,7 +2813,139 @@ function VerifyEmailRow() {
   );
 }
 
-function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON, consentActive, onWithdrawConsent }) {
+// Fix #217: Workout Preferences sub-panel — stacks above Settings (z 950 vs 900) so the
+// user can flick back to Settings via the back arrow without losing context. Houses the
+// new Auto-start Rest Timer toggle plus the existing prefs (1RM formula, effort metric,
+// sound, units) that were previously inline in Settings. Future toggles (default rest
+// duration, auto-progression, default RPE prompt, etc.) drop in here without rework.
+function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
+  const t = useT();
+  const accent = "#5B9BD5";
+  const cardStyle = { background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 };
+  const labelStyle = { fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 4 };
+  const subStyle = { fontSize: 10, color: t.textMuted, marginBottom: 8 };
+  return (
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 950, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}
+      onClick={onClose}>
+      {/* Backdrop */}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+      {/* Sheet */}
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: 420, background: t.surface, borderRadius: "20px 20px 0 0", padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 40px rgba(0,0,0,0.4)" }}>
+        {/* Handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border }} />
+        </div>
+        {/* Header — back arrow returns to Settings */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 16, borderBottom: `1px solid ${t.border}`, marginBottom: 16 }}>
+          <button onClick={onClose} aria-label="Back to Settings" style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted, transform: "rotate(180deg)" }}>
+            <Icon name="chevronRight" size={14} />
+          </button>
+          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1 }}>
+            <span style={{ color: accent }}>Workout Preferences</span>
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: t.textMuted }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        {/* Intro */}
+        <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+          Tweak how the app behaves during a workout. Changes save instantly and sync across your devices.
+        </div>
+
+        {/* Rest Timer section */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 8 }}>Rest Timer</div>
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Auto-start rest timer after each set</div>
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>Timer begins automatically when you complete a set. Off by default — you start the timer manually when you're ready.</div>
+            </div>
+            <button
+              onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest })}
+              style={{ background: workoutPrefs?.autoStartRest ? accent : t.surface, border: `1px solid ${workoutPrefs?.autoStartRest ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.autoStartRest ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0, minHeight: 28 }}
+              aria-pressed={!!workoutPrefs?.autoStartRest}
+            >
+              {workoutPrefs?.autoStartRest ? "ON" : "OFF"}
+            </button>
+          </div>
+        </div>
+
+        {/* Calculations section */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, margin: "16px 0 8px" }}>Calculations</div>
+        <div style={cardStyle}>
+          <div style={labelStyle}>1RM Formula</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {[
+              { id: "avg",     label: "Both (avg)", sub: "Epley + Brzycki" },
+              { id: "epley",   label: "Epley",      sub: "w × (1 + r/30)" },
+              { id: "brzycki", label: "Brzycki",    sub: "w × 36/(37-r)" },
+            ].map(opt => {
+              const active = (workoutPrefs?.oneRMFormula || "avg") === opt.id;
+              return (
+                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), oneRMFormula: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "8px 6px", fontSize: 11, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, touchAction: "manipulation" }}>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.8, fontFamily: "'Space Mono', monospace" }}>{opt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={cardStyle}>
+          <div style={labelStyle}>Effort Metric</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { id: "rpe", label: "RPE",  sub: "Rate of Perceived Exertion (6–10)" },
+              { id: "rir", label: "RIR",  sub: "Reps in Reserve (0–5)" },
+            ].map(opt => {
+              const active = (workoutPrefs?.effortMetric || "rpe") === opt.id;
+              return (
+                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Audio + Units section */}
+        <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, margin: "16px 0 8px" }}>Audio &amp; Units</div>
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600 }}>Sound effects</div>
+              <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>Subtle tones on set complete, rest timer end, PR unlock.</div>
+            </div>
+            <button onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound })} style={{ background: workoutPrefs?.sound ? accent : t.surface, border: `1px solid ${workoutPrefs?.sound ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.sound ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0 }}>
+              {workoutPrefs?.sound ? "ON" : "OFF"}
+            </button>
+          </div>
+        </div>
+        <div style={cardStyle}>
+          <div style={labelStyle}>Units</div>
+          <div style={subStyle}>Affects how new entries are labeled. Existing data isn't auto-converted yet.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { id: "imperial", label: "Imperial", sub: "lbs / inches" },
+              { id: "metric",   label: "Metric",   sub: "kg / cm" },
+            ].map(opt => {
+              const active = (workoutPrefs?.units || "imperial") === opt.id;
+              return (
+                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditProfile, onManageTags, onExport, workoutPrefs, onWorkoutPrefs, onOpenWorkoutPrefs, onDeleteAccount, onBackupJSON, onRestoreJSON, consentActive, onWithdrawConsent }) {
   const t = useT();
   const theme = useContext(ThemeCtx);
   const accent = "#5B9BD5";
@@ -2879,76 +3017,21 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
             <div style={{ fontSize: 10, color: t.textMuted, marginTop: 6, textAlign: "center" }}>Following your device setting — currently {theme}.</div>
           )}
         </div>
-        {/* Fix #81/#82: Workout Preferences */}
-        {onWorkoutPrefs && (
+        {/* Fix #217: Workout Preferences moved into a dedicated sub-panel.
+            Was previously an inline section here (1RM, Effort, Sound, Units). Migrated
+            so the new Auto-start Rest Timer toggle has a coherent home alongside the
+            existing prefs, and so future toggles can be added without bloating this
+            top-level Settings sheet. */}
+        {onOpenWorkoutPrefs && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Workout Preferences</div>
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 8 }}>1RM Formula</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "avg",     label: "Both (avg)", sub: "Epley + Brzycki" },
-                  { id: "epley",   label: "Epley",      sub: "w × (1 + r/30)" },
-                  { id: "brzycki", label: "Brzycki",    sub: "w × 36/(37-r)" },
-                ].map(opt => {
-                  const active = (workoutPrefs?.oneRMFormula || "avg") === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), oneRMFormula: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "8px 6px", fontSize: 11, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, touchAction: "manipulation" }}>
-                      <span>{opt.label}</span>
-                      <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.8, fontFamily: "'Space Mono', monospace" }}>{opt.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 8 }}>Effort Metric</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "rpe", label: "RPE",  sub: "Rate of Perceived Exertion (6–10)" },
-                  { id: "rir", label: "RIR",  sub: "Reps in Reserve (0–5)" },
-                ].map(opt => {
-                  const active = (workoutPrefs?.effortMetric || "rpe") === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
-                      <span>{opt.label}</span>
-                      <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {/* Fix #77: Sound effects toggle */}
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600 }}>Sound effects</div>
-                  <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>Subtle tones on set complete, rest timer end, PR unlock.</div>
-                </div>
-                <button onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound })} style={{ background: workoutPrefs?.sound ? accent : t.surface, border: `1px solid ${workoutPrefs?.sound ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.sound ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0 }}>
-                  {workoutPrefs?.sound ? "ON" : "OFF"}
-                </button>
-              </div>
-            </div>
-            {/* Fix #46: Units preference (display-only for now; full conversion is a separate task) */}
-            <div style={{ background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
-              <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600, marginBottom: 4 }}>Units</div>
-              <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 8 }}>Affects how new entries are labeled. Existing data isn't auto-converted yet.</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "imperial", label: "Imperial", sub: "lbs / inches" },
-                  { id: "metric",   label: "Metric",   sub: "kg / cm" },
-                ].map(opt => {
-                  const active = (workoutPrefs?.units || "imperial") === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
-                      <span>{opt.label}</span>
-                      <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Workout</div>
+            <button onClick={onOpenWorkoutPrefs} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: t.text, boxSizing: "border-box" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14 }}>
+                <Icon name="dumbbell" size={16} />
+                Workout Preferences
+              </span>
+              <Icon name="chevronRight" size={14} color={t.textMuted} />
+            </button>
           </div>
         )}
         {/* Email verification */}
@@ -4790,6 +4873,9 @@ export default function App() {
   const [helpPage, setHelpPage] = useState(null);
   const [showPlateCalc, setShowPlateCalc] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // Fix #217: Workout Preferences sub-panel — stacks above showSettings so back-arrow
+  // returns to Settings naturally without re-opening it.
+  const [showWorkoutPrefs, setShowWorkoutPrefs] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [show1RM, setShow1RM] = useState(false);
@@ -5547,6 +5633,7 @@ export default function App() {
                   onFocus={() => setCurrentExerciseIdx(i)}
                   triggerUndo={triggerUndo}
                   effortMetric={(data.workoutPrefs && data.workoutPrefs.effortMetric) || "rpe"}
+                  autoStartRest={!!(data.workoutPrefs && data.workoutPrefs.autoStartRest)}
                   onChange={updated => {
                     const exercises = [...workout.exercises];
                     exercises[i] = updated;
@@ -6262,6 +6349,11 @@ export default function App() {
       {show1RM && <OneRMCalculator onClose={() => setShow1RM(false)} formula={(data.workoutPrefs && data.workoutPrefs.oneRMFormula) || "avg"} />}
       {showSaveTemplate && workout && <SaveTemplateSheet exercises={workout.exercises} existingTemplates={templates} onSave={saveTemplate} onClose={() => setShowSaveTemplate(false)} />}
       {showTemplateManager && <TemplateManager templates={templates} onLoad={loadTemplate} onDelete={deleteTemplate} onRename={renameTemplate} onClose={() => setShowTemplateManager(false)} />}
+      {showWorkoutPrefs && <WorkoutPreferencesPanel
+        workoutPrefs={data.workoutPrefs || {}}
+        onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
+        onClose={() => setShowWorkoutPrefs(false)}
+      />}
       {showSettings && <SettingsModal
         onClose={() => setShowSettings(false)}
         themePref={themePref}
@@ -6271,6 +6363,7 @@ export default function App() {
         onExport={() => { setShowSettings(false); exportCSV(); }}
         workoutPrefs={data.workoutPrefs || {}}
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
+        onOpenWorkoutPrefs={() => setShowWorkoutPrefs(true)}
         onDeleteAccount={() => { setShowSettings(false); setShowDeleteAccount(true); }}
         consentActive={!!(readLocalConsent() || data?.privacyConsent?.acceptedAt)}
         onWithdrawConsent={() => { withdrawConsent({ data, save }); setShowSettings(false); }}
