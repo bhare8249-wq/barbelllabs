@@ -5502,17 +5502,19 @@ export default function App() {
 
           {/* Focus mode: only one exercise expanded (active); others queued (collapsed) or done.
               Sort: active → queued (in original order) → done (in original order).
-              Hidden when picker is open so the screen stays focused on adding the next exercise. */}
-          {workout && !showExPicker && (() => {
+              When picker is open, only the done pills remain visible — gives the user a
+              persistent record of what they just finished while they pick the next one. */}
+          {workout && (() => {
             const activeIdx = (currentExerciseIdx != null && workout.exercises[currentExerciseIdx] && !workout.exercises[currentExerciseIdx].done)
               ? currentExerciseIdx
               : workout.exercises.findIndex(e => !e.done);
-            const ordered = workout.exercises.map((ex, i) => ({ ex, i }))
-              .sort((a, b) => {
-                const ra = a.ex.done ? 2 : (a.i === activeIdx ? 0 : 1);
-                const rb = b.ex.done ? 2 : (b.i === activeIdx ? 0 : 1);
-                return ra - rb;
-              });
+            const visible = workout.exercises.map((ex, i) => ({ ex, i }))
+              .filter(({ ex }) => !showExPicker || ex.done);
+            const ordered = visible.sort((a, b) => {
+              const ra = a.ex.done ? 2 : (a.i === activeIdx ? 0 : 1);
+              const rb = b.ex.done ? 2 : (b.i === activeIdx ? 0 : 1);
+              return ra - rb;
+            });
             // Compute queued ordering for the badge number
             const queuedIndices = workout.exercises.map((ex, i) => (!ex.done && i !== activeIdx) ? i : -1).filter(i => i >= 0);
             return ordered.map(({ ex, i }) => {
@@ -5536,7 +5538,7 @@ export default function App() {
                       // Delay so the user visually registers the exercise becoming Done before
                       // the picker takes over the screen — prevents the eye-jump.
                       const allDone = exercises.every(e => e.done);
-                      if (allDone) { setTimeout(() => setShowExPicker(true), 700); }
+                      if (allDone) { setTimeout(() => setShowExPicker(true), 1500); }
                     }
                   }}
                   onRemove={() => requestRemoveExercise(i)}
