@@ -19,6 +19,15 @@ import {
 } from "firebase/auth";
 import { HELP_CONTENT } from "./helpContent";
 import { GYM_BIBLE } from "./exerciseDatabase";
+import {
+  saveActiveWorkout,
+  clearActiveWorkout,
+  checkForRecoverableWorkout,
+  discardRecoverableWorkout,
+  purgeOldRecoveredWorkouts,
+  summarizeRecoverableWorkout,
+  installLifecycleListeners,
+} from "./workoutSession";
 
 // ── Theme ─────────────────────────────────────────────────────────────
 const ThemeCtx = createContext("dark");
@@ -185,8 +194,8 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.4.53";
-const BUILD_DATE  = "2026-04-26";
+const APP_VERSION = "2.5.0";
+const BUILD_DATE  = "2026-05-06";
 
 function useStorage(uid) {
   const [data, setData] = useState({ workouts: [], bodyweight: [] });
@@ -4955,6 +4964,71 @@ export default function App() {
   const [viewDir, setViewDir] = useState(1);
   const prevViewRef = useRef("home");
   const [workout, setWorkout] = useState(null);
+  // #226 — Active-workout persistence layer wiring.
+  // recoveryPrompt holds a candidate workout the user needs to choose to
+  // restore or discard (only used when the saved workout is older than the
+  // auto-restore window). Auto-restore happens silently below in a useEffect.
+  const [recoveryPrompt, setRecoveryPrompt] = useState(null);
+  // Ref mirror so lifecycle handlers (which capture a stable closure) always
+  // read the latest in-memory workout — not a stale snapshot from when the
+  // listener was installed.
+  const workoutRef = useRef(null);
+  useEffect(() => { workoutRef.current = workout; }, [workout]);
+
+  // #226 — Write-through to IndexedDB on every workout-state change.
+  // Small record (single user's current session); writes are sub-frame.
+  // When workout transitions to null (Finish, Logout) we clear the row so
+  // a recovery prompt doesn't fire on next launch.
+  useEffect(() => {
+    const uid = firebaseUser?.uid;
+    if (!uid) return;
+    if (workout) {
+      saveActiveWorkout(uid, workout);
+    } else {
+      clearActiveWorkout(uid);
+    }
+  }, [workout, firebaseUser?.uid]);
+
+  // #226 — Lifecycle listeners (Capacitor appStateChange/pause + web
+  // visibilitychange/pagehide + 10s heartbeat). Force-saves on background
+  // so iOS process-kill mid-rest can't lose data. Reinstalled when uid
+  // changes (sign-out → sign-in different account).
+  useEffect(() => {
+    const uid = firebaseUser?.uid;
+    if (!uid) return undefined;
+    return installLifecycleListeners({
+      uid,
+      getCurrentWorkout: () => workoutRef.current,
+    });
+  }, [firebaseUser?.uid]);
+
+  // #226 — Recovery flow on auth resolve. Auto-restores recent unfinished
+  // workouts silently; opens the recovery prompt for older ones. Also
+  // housekeeps the soft-delete graveyard.
+  useEffect(() => {
+    const uid = firebaseUser?.uid;
+    if (!uid) return;
+    let cancelled = false;
+    (async () => {
+      purgeOldRecoveredWorkouts();
+      // Don't try to recover if a workout is already in flight in memory
+      // (e.g. user navigated back to Home and we re-mounted).
+      if (workoutRef.current) return;
+      const result = await checkForRecoverableWorkout(uid);
+      if (cancelled) return;
+      if (result.kind === "autoRestore") {
+        setWorkout(result.workout);
+        setView("log");
+      } else if (result.kind === "prompt") {
+        setRecoveryPrompt({
+          workout: result.workout,
+          summary: summarizeRecoverableWorkout(result.workout, result.ageMs),
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [firebaseUser?.uid]);
+
   const [exSearch, setExSearch] = useState("");
   const [exCatFilter, setExCatFilter] = useState("all");
   const [exEquipFilter, setExEquipFilter] = useState("all");
@@ -6545,6 +6619,29 @@ export default function App() {
           variant={confirmDialog.variant}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+      {/* #226 — Recovery prompt for unfinished workouts older than the
+          auto-restore window. Restore is the primary action (Steel Blue);
+          Discard is a soft archive — workouts go to a 7-day soft-delete
+          store, not hard-deleted, in case the user changes their mind. */}
+      {recoveryPrompt && (
+        <ConfirmDialog
+          title="We found a workout from earlier"
+          message={recoveryPrompt.summary}
+          confirmLabel="Restore"
+          cancelLabel="Discard"
+          variant="primary"
+          onConfirm={() => {
+            setWorkout(recoveryPrompt.workout);
+            setView("log");
+            setRecoveryPrompt(null);
+          }}
+          onCancel={() => {
+            const uid = firebaseUser?.uid;
+            if (uid) discardRecoverableWorkout(uid, recoveryPrompt.workout);
+            setRecoveryPrompt(null);
+          }}
         />
       )}
       {undoState && (
