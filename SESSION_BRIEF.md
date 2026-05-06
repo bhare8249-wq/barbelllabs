@@ -1,5 +1,7 @@
 # Barbell Labs — Session Brief (Save Point)
-**Last updated:** 2026-05-01 · **Version:** 2.4.53 · **All recent PRs merged through #51 · Brief now lives in-repo (auto-syncs via git pull)**
+**Last updated:** 2026-05-06 · **Version:** 2.4.53 · **All recent PRs merged through #57 · `fix-batch-46` (Smart Rest Timer + #217) open and awaiting Vercel preview test + merge**
+
+> ⚠️ **Pre-commit version-bump hook didn't fire during the last session's 9 commits.** Investigate `.git/hooks/pre-commit` before next push, or bump version manually in `package.json` + `src/App.jsx` (`APP_VERSION`, `BUILD_DATE`) before merging `fix-batch-46`.
 
 This file is a handoff doc for continuing the Barbell Labs build in a new Claude conversation. Paste the **"Prompt for new Claude session"** block at the bottom into the new chat as your first message.
 
@@ -86,6 +88,7 @@ This file is a handoff doc for continuing the Barbell Labs build in a new Claude
 | 105 | ✅ | Reusable ConfirmDialog + UndoToast components (PR #48); applied to exercise card delete (hybrid) + set delete (undo) + template delete (modal+undo) + history workout delete (modal+undo) (PRs #48 + #49). Full destructive-action audit complete. |
 | 106 | ✅ | Collapsible RPE pill (auto-collapse 1.8s after last value change) + Notes (collapse-on-blur with content, expand-on-tap with refocus) (PR #51). Fast-paced detection deferred — see deferred items memory. |
 | 107 | ❌ | Edit completed workouts from History — add/remove exercises, edit sets, recalculate PRs/tonnage on edit, lock date editing. Dedicated session. |
+| 217 | ⚠️ | **Rest timer manual default + Smart Rest Timer system** — branch `fix-batch-46` open. Manual-start by default; new Settings → Workout Preferences sub-panel houses the Smart Rest Timer toggle (and migrates existing inline 1RM/Effort/Sound/Units prefs). Per-set ✓ button on every `SetRow` (`set.done` field). Unified trigger model when Smart is ON: "first signal after timer is idle starts it; later signals don't reset it." Three triggers (focus on any input, ✓ tap, Add Set after complete) all use `gt-start-timer-if-idle`. Force-reset only via manual Reset button or Add Set "Yes, reset" prompt (prompt fires only on the genuinely ambiguous case: Add Set + timer running + last set complete + `set.done=false`). Manual Reset visible during running/paused (was only when done). **Spec divergence:** spec mentioned per-exercise rest duration; app has only a single global preset — flag for future feature. |
 
 ## Bonus work NOT on the 94-list (UX rebuild around active workout)
 
@@ -187,15 +190,36 @@ Firebase + Capacitor on Vercel. Main file: src/App.jsx (~5,200
 lines). Brand: Steel Blue (#5B9BD5) on #0A0A0A dark, Bebas Neue +
 DM Sans + Space Mono.
 
-We've been working through a 94-item UX/UI fix list pre-launch. As
-of 2026-04-25 we're at version 2.4.46 with 43 PRs merged. Latest
-PR (#43) bundled three big things: optimistic UI / sync-error retry
-banner on Finish Workout (#69 done), exercise database expanded
-215 → 1,640 entries (extracted to src/exerciseDatabase.js, includes
-new Mobility category), and an offline indicator banner. Roughly
-60+ items shipped, with paywall (#70),
-analytics (#39), offline mode (#65), Sentry (#67), and rest-timer
-robustness (#80) as the biggest remaining items.
+We've been working through a 107-item UX/UI fix list pre-launch (plus
+#217 added recently). As of 2026-05-06 we're at version 2.4.53 with
+PRs merged through #57. Most recent merged work: PR #51 (#106
+collapsible RPE pill + Notes), PRs #53-57 (fix-batch-45 Done transition
+polish series), PR #50 (picker search aliases), PR #49 (#105 destructive
+pattern audit). #80 rest-timer robustness shipped in PR #46.
+
+OPEN BRANCH: `fix-batch-46` — implements #217 (rest timer manual default
++ Workout Preferences sub-panel) plus a Smart Rest Timer system.
+Per-set ✓ button on every set row, unified trigger model: "first signal
+after timer is idle starts it; later signals don't reset it." Three
+triggers (focus on input, ✓, Add Set after complete) all use
+gt-start-timer-if-idle. Force-reset only via manual Reset or Add Set
+"Yes, reset" prompt. Awaits Vercel preview testing + merge.
+
+⚠️ Pre-commit version-bump hook didn't fire across fix-batch-46's
+9 commits — investigate `.git/hooks/pre-commit` or bump version
+manually before merging.
+
+Roughly 65+ items shipped, with paywall (#70), analytics (#39),
+offline mode (#65), Sentry (#67) as the biggest remaining items.
+
+Most recent session (open on `fix-batch-46`): rebuilt the rest timer
+into a Smart Rest Timer system (#217). Manual-start by default; new
+Settings → Workout Preferences sub-panel; per-set ✓ button on every
+SetRow; unified trigger model where the first signal after the timer
+goes idle starts it and later signals don't reset it. The Add Set
+prompt is the only auto force-reset path. Manual Reset button now
+visible during running/paused states. helpContent.js entries for
+Rest Timer + Smart Rest Timer rewritten.
 
 Recent UX rebuild around the active-workout Log view (last ~10 PRs):
 single-active exercise focus mode, queued + done pills, picker focus
