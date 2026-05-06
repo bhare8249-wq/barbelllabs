@@ -3,7 +3,7 @@
 **Purpose:** Quick-scan status of all items so Code knows what's done, what's pending, what's coming. Use to spot bundling opportunities and avoid duplicate work.
 
 **Last updated:** May 6, 2026
-**Total items:** 226
+**Total items:** 227
 
 ---
 
@@ -232,8 +232,8 @@ These are mostly NOT Code's domain — they're business operations, legal, marke
 
 | # | Status | Item |
 |---|--------|------|
-| 217 | 🔄 | Rest Timer manual-start + Workout Preferences sub-panel — **active** |
-| 218 | ⏳ | Swipe-to-delete state persistence bug (systemic — workout AND set level) |
+| 217 | ✅ | Rest Timer manual-start + Workout Preferences sub-panel + Smart Rest Timer system (PRs #58 + #59) |
+| 218 | ⏳ | Swipe-to-delete state persistence bug (systemic — workout AND set level). **Note:** NOT incidentally fixed by #226 — swipe state is React state in SwipeableRow, not part of the active workout object. |
 | 219 | ⏳ | App-wide motion polish — folds into #225 Phase 3 |
 | 220 | ⏳ | Confirmation modals on destructive actions (implements #105) |
 | 221 | ⏳ | Finish Workout confirmation modal |
@@ -241,7 +241,9 @@ These are mostly NOT Code's domain — they're business operations, legal, marke
 | 223 | ⏳ | Re-open recently finished workout (2-hour grace) |
 | 224 | ⏳ | Progress nav restructure (3-layer architecture, multi-pass) |
 | 225 | ⏳ | Premium polish initiative (10 phases, 2-3 month effort) |
-| 226 | 🚨 | **Workout data persistence (CRITICAL — launch-blocking)** |
+| 226 | 🔄 | **Workout data persistence — code shipped on `fix-batch-47`, awaiting real-device test (iPhone 12+/iOS 17+, Samsung) before merge.** Module: `src/workoutSession/`. Firestore offline persistence enabled. Capacitor `@capacitor/app` lifecycle wiring + 10s heartbeat. |
+| 227 | ⏳ | Migrate pre-commit version-bump hook to Husky so it travels with the repo. Currently lives only on Brian's laptop; desktop machine has no hook, so commits there don't bump version. |
+| 68  | ⏳ | (re-flagged) Sentry crash reporting — DSN needed before wiring. Will plug into the workoutSession layer's IDB-failure paths once installed. |
 
 ### #12 — Browse Starter Programs expansion
 
@@ -249,17 +251,18 @@ Existing 10 programs stay. Adding 10 more (12k–12t): Dumbbell-Only Full Body, 
 
 ---
 
-## Currently in flight (this session)
+## Currently in flight
 
-🔄 **#217 — Rest Timer manual-start + Workout Preferences sub-panel** (#80 may be bundled at your discretion)
+🔄 **#226 — Workout data persistence** — code complete on `fix-batch-47`; awaiting Brian's real-device acceptance test before merge.
 
 ## Recommended priority queue (next sessions)
 
-1. 🚨 **#226 — Data persistence (CRITICAL, launch-blocking)** — two real users have lost workout data on iPhone
+1. **Real-device test for #226** (Brian on iPhone 12+/iOS 17+ and Samsung) → merge
 2. **#218 + #220 + #221 + #222 + #223 — Workout flow safety bundle** (thematically related, share code paths)
-3. **#224 Pass 1 — Progress restructure surface** (biggest UX upgrade)
-4. **#225 Phase 1 + Phase 3 — Premium polish foundation** (haptics + motion)
-5. **#12 expansion — Browse Programs additions + filter chips**
+3. **#227 — Husky migration of pre-commit version-bump hook** (small, infrastructure)
+4. **#224 Pass 1 — Progress restructure surface** (biggest UX upgrade)
+5. **#225 Phase 1 + Phase 3 — Premium polish foundation** (haptics + motion)
+6. **#12 expansion — Browse Programs additions + filter chips**
 
 ---
 
