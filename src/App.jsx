@@ -2159,9 +2159,19 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     : rpe >= 8.5 ? "#ff9500"
     : "#5bb85b";
 
+  // Fix #97 (visual polish): row-wide tint when type is warmup or dropset so the
+  // whole set reads at a glance, not just the leftmost W/D pill. Warmup gets a
+  // softer amber wash; dropset gets a more saturated orange (because drop sets
+  // ARE training stimulus, just at reduced load — they deserve the visual weight).
+  // Working sets keep `t.surfaceHigh` so they look identical to pre-#97.
+  const rowBg = setType === "warmup"
+    ? `${typeColor}10`
+    : setType === "dropset"
+      ? `${typeColor}18`
+      : t.surfaceHigh;
   return (
     <div style={{ marginBottom: 8 }}>
-      <SwipeableRow flat onDelete={onRemove} bgColor={t.surfaceHigh}>
+      <SwipeableRow flat onDelete={onRemove} bgColor={rowBg}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {/* Fix #97: clickable type indicator. Cycles working → warmup → dropset.
               For working sets it looks identical to the previous static index number. */}
@@ -2702,15 +2712,25 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
               {workout.exercises.map((ex, j) => (
                 <div key={j} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: j < workout.exercises.length - 1 ? `1px solid ${t.border}` : "none" }}>
                   <div style={{ color: accent, fontSize: 13, fontWeight: 700, marginBottom: 5 }}>{ex.name}</div>
-                  {/* Fix #97: render small W/D pill for non-working sets so history
-                      reflects the same type tagging the user did at log time. Working
-                      sets remain visually clean (just the index number). */}
+                  {/* Fix #97: history rows pick up the same W/D pill + row-wide
+                      tint as the active log row, so a session's structure
+                      (warmup → working → drop) reads at a glance after the fact. */}
                   {ex.sets.map((s, k) => {
                     const setType = isValidSetType(s.type) ? s.type : "working";
                     const tColor = setType === "warmup" ? "#E8B547" : setType === "dropset" ? "#FF7849" : t.textMuted;
                     const indexLabel = setType === "warmup" ? "W" : setType === "dropset" ? "D" : `${k + 1}.`;
+                    const tint = setType === "warmup" ? `${tColor}10` : setType === "dropset" ? `${tColor}18` : "transparent";
                     return (
-                      <div key={s.id || k} style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "center" }}>
+                      <div key={s.id || k} style={{
+                        display: "flex",
+                        gap: 8,
+                        fontSize: 13,
+                        alignItems: "center",
+                        padding: setType === "working" ? "1px 0" : "3px 8px",
+                        margin: setType === "working" ? 0 : "1px 0",
+                        background: tint,
+                        borderRadius: setType === "working" ? 0 : 6,
+                      }}>
                         <span style={{
                           color: tColor,
                           width: 22,
@@ -2718,10 +2738,6 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
                           fontWeight: setType === "working" ? 400 : 700,
                           fontSize: setType === "working" ? 13 : 11,
                           letterSpacing: setType === "working" ? 0 : 0.4,
-                          background: setType === "working" ? "transparent" : `${tColor}1f`,
-                          border: setType === "working" ? "none" : `1px solid ${tColor}55`,
-                          borderRadius: 4,
-                          padding: setType === "working" ? 0 : "1px 0",
                         }}>{indexLabel}</span>
                         <span style={{ color: t.textSub }}>{s.weight} lbs</span>
                         <span style={{ color: t.textMuted }}>×</span>
