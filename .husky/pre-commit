@@ -1,0 +1,83 @@
+#!/usr/bin/env sh
+# Auto-bump version + APP_VERSION + BUILD_DATE on every commit.
+#
+# Why: the original hook was a private file on Brian's laptop. It never
+# travelled with the repo, so commits made on other machines silently
+# skipped the version bump. Moving it into .husky/pre-commit means the
+# hook is committed to git, installed by `npm install` on every clone
+# (via the "prepare": "husky" script in package.json), and runs on every
+# commit regardless of which machine you're working from. (#227)
+#
+# Behavior:
+#   - Increments the PATCH digit of `version` in package.json
+#   - Mirrors the new version into APP_VERSION in src/App.jsx
+#   - Stamps today's date into BUILD_DATE in src/App.jsx (YYYY-MM-DD)
+#   - Stages the modified files so they land in the same commit
+#
+# Skip cases (no-op, exits 0):
+#   - The user manually edited the version in this commit (we detect
+#     this by diffing the staged version against HEAD's version; if
+#     they differ, we trust the manual bump and don't override)
+#
+# To bypass entirely for a single commit: `git commit --no-verify`.
+
+set -e
+
+PKG="package.json"
+APP="src/App.jsx"
+
+# Bail quietly if package.json doesn't exist (e.g. running in a non-repo).
+[ -f "$PKG" ] || exit 0
+
+# Read the version that's about to be committed (from the staged blob if
+# package.json is staged, otherwise from the working tree).
+if git diff --cached --quiet -- "$PKG"; then
+  STAGED_VERSION=$(node -p "require('./$PKG').version")
+else
+  STAGED_VERSION=$(git show ":$PKG" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+fi
+
+# Read the version at HEAD (the previous commit's package.json).
+HEAD_VERSION=$(git show HEAD:"$PKG" 2>/dev/null | node -p "try { JSON.parse(require('fs').readFileSync(0, 'utf8')).version } catch { '' }" 2>/dev/null || echo "")
+
+# If the user already bumped the version manually for this commit, trust
+# them — don't override. We detect "manual bump" by the staged version
+# differing from HEAD's version.
+if [ -n "$HEAD_VERSION" ] && [ "$STAGED_VERSION" != "$HEAD_VERSION" ]; then
+  echo "[pre-commit] version already bumped manually ($HEAD_VERSION → $STAGED_VERSION) — skipping auto-bump"
+  exit 0
+fi
+
+# Compute the next patch version.
+NEXT_VERSION=$(node -e "
+  const v = '$STAGED_VERSION'.split('.').map(Number);
+  if (v.length < 3 || v.some(isNaN)) { console.error('Could not parse version: $STAGED_VERSION'); process.exit(1); }
+  v[2] += 1;
+  console.log(v.join('.'));
+")
+
+BUILD_DATE=$(date +%Y-%m-%d)
+
+echo "[pre-commit] auto-bump $STAGED_VERSION -> $NEXT_VERSION (build $BUILD_DATE)"
+
+# Patch package.json
+node -e "
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync('$PKG', 'utf8'));
+  pkg.version = '$NEXT_VERSION';
+  fs.writeFileSync('$PKG', JSON.stringify(pkg, null, 2) + '\n');
+"
+
+# Patch src/App.jsx — update APP_VERSION + BUILD_DATE constants.
+if [ -f "$APP" ]; then
+  node -e "
+    const fs = require('fs');
+    let src = fs.readFileSync('$APP', 'utf8');
+    src = src.replace(/(const APP_VERSION\s*=\s*['\"])[^'\"]*(['\"])/, '\$1$NEXT_VERSION\$2');
+    src = src.replace(/(const BUILD_DATE\s*=\s*['\"])[^'\"]*(['\"])/, '\$1$BUILD_DATE\$2');
+    fs.writeFileSync('$APP', src);
+  "
+  git add "$APP"
+fi
+
+git add "$PKG"
