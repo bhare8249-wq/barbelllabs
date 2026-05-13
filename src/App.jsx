@@ -2158,17 +2158,12 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     firstFocusFiredRef.current = true;
     onFirstFocus?.();
   };
-  // Per-set ✓ toggle. Universal explicit "I just finished this" signal — works for
-  // every workflow (empty / template / edited). Always resets timer to full.
-  const toggleDone = () => {
-    const goingDone = !set.done;
-    onChange({ ...set, done: goingDone });
-    haptic(goingDone ? [0, 30, 20, 30] : 8);
-    // Fix #97: pass set.type to the parent so it can decide whether to fire the rest
-    // timer auto-start. Warmup sets typically don't need rest, so the parent skips
-    // the timer event for them (ding still plays — completion feedback is universal).
-    if (goingDone) onMarkDone?.(set.type);
-  };
+  // Note: a per-set `toggleDone` helper used to live here, called by an inline ✓
+  // button at the end of the row. That UI is gone (#228) — completion is now
+  // gestural (hold or swipe-right) and un-marking happens by tapping the green
+  // ✓ pill that replaces the type indicator when set.done is true. Both code
+  // paths handle done-flipping inline where they need it, so no shared helper
+  // is required anymore.
   // Fix #97: per-set type indicator. Default "working" sets render exactly like before
   // (just the set number, no visual chrome) — sleek for the 90%+ case. Warmup and
   // dropset show a small colored pill with "W" or "D" in place of the number. Tap
@@ -2221,41 +2216,148 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     : setType === "dropset"
       ? `linear-gradient(to right, ${typeColor}26 0%, ${typeColor}0a 40%, ${t.surfaceHigh} 100%)`
       : t.surfaceHigh;
+
+  // #228 — Hold-to-confirm gesture. The user long-presses anywhere on the row
+  // (away from interactive elements like inputs / pill / RPE chip), the row
+  // fills green from left to right over HOLD_DURATION_MS, and at full fill we
+  // mark the set done with a satisfying haptic pop. Movement >= HOLD_CANCEL_PX
+  // cancels the gesture so swipe gestures still take priority for swipe-delete /
+  // swipe-complete.
+  const HOLD_DURATION_MS = 520;
+  const HOLD_CANCEL_PX = 10;
+  const [holdProgress, setHoldProgress] = useState(0);
+  const holdRafRef = useRef(null);
+  const holdStartTsRef = useRef(0);
+  const holdStartPosRef = useRef({ x: 0, y: 0 });
+  const holdDoneRef = useRef(false);
+  const cancelHold = () => {
+    if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current);
+    holdRafRef.current = null;
+    holdStartTsRef.current = 0;
+    holdDoneRef.current = false;
+    setHoldProgress(0);
+  };
+  const isInteractiveTarget = (target) => {
+    if (!target || !target.closest) return false;
+    return !!target.closest('input, textarea, button, select, [role="button"]');
+  };
+  const startHold = (clientX, clientY, target) => {
+    if (set.done) return;                  // already done — long-press would do nothing
+    if (isInteractiveTarget(target)) return; // don't fight inputs / chips / pills
+    holdStartTsRef.current = Date.now();
+    holdStartPosRef.current = { x: clientX, y: clientY };
+    holdDoneRef.current = false;
+    const tick = () => {
+      const elapsed = Date.now() - holdStartTsRef.current;
+      const p = Math.min(elapsed / HOLD_DURATION_MS, 1);
+      setHoldProgress(p);
+      if (p >= 1 && !holdDoneRef.current) {
+        holdDoneRef.current = true;
+        onChange({ ...set, done: true });
+        haptic([0, 60, 30, 90]);
+        onMarkDone?.(set.type);
+        // Brief pause at full so the user sees the bar finish, then reset.
+        setTimeout(() => { setHoldProgress(0); }, 180);
+        return;
+      }
+      holdRafRef.current = requestAnimationFrame(tick);
+    };
+    holdRafRef.current = requestAnimationFrame(tick);
+  };
+  const moveHold = (clientX, clientY) => {
+    if (!holdStartTsRef.current) return;
+    const dx = clientX - holdStartPosRef.current.x;
+    const dy = clientY - holdStartPosRef.current.y;
+    if (Math.sqrt(dx * dx + dy * dy) > HOLD_CANCEL_PX) cancelHold();
+  };
   return (
     <div style={{ marginBottom: 8 }}>
-      <SwipeableRow flat onDelete={onRemove} bgColor={rowBg}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <SwipeableRow flat onDelete={onRemove} bgColor={rowBg} onComplete={() => { if (!set.done) { onChange({ ...set, done: true }); haptic([0, 60, 30, 90]); onMarkDone?.(set.type); } }}>
+        {/* #228 — gestural completion layer. The hold-to-confirm handlers attach
+            here so they fire on the row body but not on interactive children
+            (inputs / chips / pill — `isInteractiveTarget` filters those). The
+            green progress fill is an absolute overlay behind the row content
+            that grows left-to-right as the user holds.
+
+            When `set.done` is true we add an inset 3px green left-edge accent
+            and dim the row to ~85% opacity — the iOS "this item is settled"
+            visual language. */}
+        <div
+          onTouchStart={(e) => { const t0 = e.touches[0]; startHold(t0.clientX, t0.clientY, e.target); }}
+          onTouchMove={(e) => { const t0 = e.touches[0]; moveHold(t0.clientX, t0.clientY); }}
+          onTouchEnd={cancelHold}
+          onTouchCancel={cancelHold}
+          onMouseDown={(e) => startHold(e.clientX, e.clientY, e.target)}
+          onMouseMove={(e) => { if (holdStartTsRef.current) moveHold(e.clientX, e.clientY); }}
+          onMouseUp={cancelHold}
+          onMouseLeave={cancelHold}
+          style={{
+            position: "relative",
+            boxShadow: set.done ? "inset 3px 0 0 #5bb85b" : "none",
+            opacity: set.done ? 0.86 : 1,
+            transition: "opacity 0.3s, box-shadow 0.3s",
+          }}
+        >
+          {/* Hold-to-confirm green fill — grows from left to right behind the row content */}
+          {holdProgress > 0 && (
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: 0, top: 0, bottom: 0,
+                width: `${holdProgress * 100}%`,
+                background: "linear-gradient(90deg, rgba(91,184,91,0.32) 0%, rgba(91,184,91,0.14) 100%)",
+                pointerEvents: "none",
+                zIndex: 0,
+                transition: "none",
+              }}
+            />
+          )}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", position: "relative", zIndex: 1 }}>
           {/* Fix #97: clickable type indicator. Cycles working → warmup → dropset.
               For working sets it looks identical to the previous static index number.
               touch events are stopped from bubbling so the SwipeableRow's gesture
               detector doesn't mistake a tap-and-twitch on the indicator for a swipe
-              and leave the trash reveal partially open. */}
+              and leave the trash reveal partially open.
+
+              #228: when `set.done` the pill becomes a green ✓ and tapping it
+              un-marks (toggling done off) — the same surface, two roles. */}
           <button
-            onClick={cycleSetType}
+            onClick={set.done ? () => { onChange({ ...set, done: false }); haptic(8); } : cycleSetType}
             onTouchStart={e => e.stopPropagation()}
             onTouchMove={e => e.stopPropagation()}
             onTouchEnd={e => e.stopPropagation()}
-            aria-label={`Set ${index + 1} type: ${setType}. Tap to change.`}
+            aria-label={set.done ? `Unmark set ${index + 1}` : `Set ${index + 1} type: ${setType}. Tap to change.`}
             style={{
               // Apple opacity recipe: ${color}1f fill + ${color}66 border + 1px white
               // inner highlight on the top edge to catch light. Working set stays
               // chromeless (just the muted number) so it reads as default.
+              // When set.done = true the pill flips to a solid Steel-meets-Green ✓
+              // glyph and acts as the un-mark control.
               width: 28, height: 28, padding: 0,
-              background: setType === "working" ? "transparent" : `${typeColor}1f`,
-              border: setType === "working" ? "none" : `1px solid ${typeColor}66`,
-              boxShadow: setType === "working" ? "none" : "inset 0 1px 0 rgba(255,255,255,0.08)",
+              background: set.done
+                ? "linear-gradient(135deg, #5bb85b, #3a8a3a)"
+                : setType === "working" ? "transparent" : `${typeColor}1f`,
+              border: set.done
+                ? "1px solid rgba(91,184,91,0.7)"
+                : setType === "working" ? "none" : `1px solid ${typeColor}66`,
+              boxShadow: set.done
+                ? "inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(91,184,91,0.28)"
+                : setType === "working" ? "none" : "inset 0 1px 0 rgba(255,255,255,0.08)",
               borderRadius: 8,
-              color: typeColor,
+              color: set.done ? "#fff" : typeColor,
               fontSize: 13,
-              fontWeight: setType === "working" ? 400 : 800,
-              letterSpacing: setType === "working" ? 0 : 0.4,
+              fontWeight: setType === "working" && !set.done ? 400 : 800,
+              letterSpacing: setType === "working" && !set.done ? 0 : 0.4,
               cursor: "pointer",
               flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
               touchAction: "manipulation",
-              transition: "background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s",
+              transition: "background 0.22s, border-color 0.22s, color 0.22s, box-shadow 0.22s",
             }}
-          >{typeLabel}</button>
+          >
+            {set.done ? <Icon name="check" size={14} /> : typeLabel}
+          </button>
           <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
           <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
           <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
@@ -2283,37 +2385,15 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
           >
             {chipLabel}
           </button>
-          <button
-            onClick={toggleDone}
-            aria-label={set.done ? "Mark set incomplete" : "Mark set complete"}
-            aria-pressed={!!set.done}
-            style={{
-              // Apple polish: opacity recipe for the empty state; full-gradient + top
-              // inner highlight + soft green glow when marked done.
-              background: set.done
-                ? "linear-gradient(135deg, #5bb85b, #3a8a3a)"
-                : "rgba(255,255,255,0.04)",
-              border: set.done
-                ? "1px solid rgba(91,184,91,0.7)"
-                : "1px solid rgba(255,255,255,0.08)",
-              boxShadow: set.done
-                ? "inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(91,184,91,0.22)"
-                : "none",
-              color: set.done ? "#fff" : t.textMuted,
-              cursor: "pointer",
-              width: 32, height: 32, minWidth: 32, padding: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: 10, flexShrink: 0, marginLeft: "auto",
-              touchAction: "manipulation",
-              transition: "background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s",
-            }}
-          >
-            <Icon name="check" size={14} />
-          </button>
-          {/* Inline X delete button removed (Brian feedback): swipe-to-delete is the
-              only deletion path. Reduces accidental-delete risk and visual noise on
-              every set row. */}
+          {/* Inline ✓ button removed in favor of gestural completion (#228 pass 2):
+                - Hold anywhere on the row to confirm (green fills the row → tap)
+                - OR swipe right to reveal a green ✓ panel
+              When set.done = true, the set-number pill itself becomes the green ✓
+              (and tapping it un-marks). The row is now button-free for a clean,
+              futuristic logging surface — Apple Lock Screen / Watch language. */}
+          <div style={{ marginLeft: "auto", flexShrink: 0, width: 4 }} />
         </div>
+        </div>{/* close hold-to-confirm wrapper */}
       </SwipeableRow>
 
       {/* Expanded RPE/RIR panel */}
@@ -4242,8 +4322,13 @@ function SaveTemplateSheet({ exercises, existingTemplates, onSave, onClose }) {
   );
 }
 
-// ── Fix #10/#13: Swipeable row (swipe-left reveals Delete action) ─────
-function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
+// ── Fix #10/#13/#228: bidirectional swipeable row
+//
+// Swipe LEFT reveals a red Delete panel on the right edge — tap to delete.
+// Swipe RIGHT reveals a green Complete panel on the left edge — tap to mark
+// done (only when onComplete is provided). The two gestures are symmetric and
+// match Apple Mail's swipe pattern (right = "good" action, left = destructive).
+function SwipeableRow({ children, onDelete, onComplete, bgColor, borderColor, flat }) {
   const REVEAL = 90;
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -4251,6 +4336,7 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
   const startY = useRef(null);
   const startOffset = useRef(0);
   const horizontalLocked = useRef(false);
+  const allowRight = !!onComplete;
 
   const onTouchStart = (e) => {
     startX.current = e.touches[0].clientX;
@@ -4270,7 +4356,12 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
     }
     e.stopPropagation();
     let next = startOffset.current + dx;
-    if (next > 0) next = 0;
+    // Cap and rubber-band past the reveal threshold in either direction.
+    if (allowRight) {
+      if (next > REVEAL) next = REVEAL + (next - REVEAL) * 0.25;
+    } else {
+      if (next > 0) next = 0;
+    }
     if (next < -REVEAL) next = -REVEAL + (next + REVEAL) * 0.25;
     setOffset(next);
   };
@@ -4279,6 +4370,7 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
     // event (otherwise it'd compute a delta from its captured start and switch tabs).
     if (horizontalLocked.current) e.stopPropagation();
     if (offset < -40) setOffset(-REVEAL);
+    else if (allowRight && offset > 40) setOffset(REVEAL);
     else setOffset(0);
     startX.current = null;
     startY.current = null;
@@ -4290,6 +4382,12 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
     e.stopPropagation();
     haptic([0, 40, 30, 80]);
     onDelete();
+  };
+  const handleComplete = (e) => {
+    e.stopPropagation();
+    haptic([0, 60, 30, 90]);
+    onComplete?.();
+    setOffset(0); // snap back so the green panel doesn't linger
   };
   const handleRowClick = (e) => {
     // Auto-close any open swipe-reveal as soon as the user taps anywhere on the row,
@@ -4306,6 +4404,15 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
 
   return (
     <div data-hswipe-safe style={{ position: "relative", overflow: "hidden", borderRadius: flat ? 10 : 14, marginBottom: flat ? 0 : 10, border: flat ? "none" : `1px solid ${borderColor}` }}>
+      {/* Green ✓ Complete panel — sits on the LEFT edge, revealed by swiping right.
+          Only rendered when onComplete is provided so we don't show a phantom green
+          slab on rows that have no completion semantics (templates, History etc). */}
+      {allowRight && (
+        <button onClick={handleComplete} style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: REVEAL, background: "linear-gradient(135deg, #5bb85b, #3a8a3a)", border: "none", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, touchAction: "manipulation", letterSpacing: 0.3, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)" }}>
+          <Icon name="check" size={flat ? 16 : 20} />
+          {!flat && "Done"}
+        </button>
+      )}
       <button onClick={handleDelete} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: REVEAL, background: "#d55b5b", border: "none", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, touchAction: "manipulation", letterSpacing: 0.3 }}>
         <Icon name="trash" size={flat ? 14 : 18} />
         {!flat && "Delete"}
