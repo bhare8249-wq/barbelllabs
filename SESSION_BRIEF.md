@@ -1,7 +1,7 @@
 # Barbell Labs — Session Brief (Save Point)
-**Last updated:** 2026-05-06 · **Version:** 2.5.0 · **PRs through #59 merged (#217 Smart Rest Timer shipped) · `fix-batch-47` open with #226 Workout Data Persistence — code complete, awaiting real-device test**
+**Last updated:** 2026-05-13 · **Version:** 2.6.0 · **#226 merged (PR #60). `fix-batch-48` open with the workout safety bundle (#218 + #220 + #221 + #222 + #223). Real-device test for #226 still pending.**
 
-> ⚠️ **Pre-commit version-bump hook is missing on the desktop machine** (`.git/hooks/pre-commit` only has `.sample` files locally). Hook lives on the laptop only — git hooks don't travel with the repo. **Filed as #227** for migration to Husky. Until then, version bumps are manual on this machine. `fix-batch-47` was bumped manually to `2.5.0`.
+> ⚠️ **Pre-commit version-bump hook is missing on the desktop machine** (`.git/hooks/pre-commit` only has `.sample` files locally). Hook lives on the laptop only — git hooks don't travel with the repo. **Filed as #227** for migration to Husky. Until then, version bumps are manual on this machine. `fix-batch-48` was bumped manually to `2.6.0`.
 
 This file is a handoff doc for continuing the Barbell Labs build in a new Claude conversation. Paste the **"Prompt for new Claude session"** block at the bottom into the new chat as your first message.
 
@@ -89,7 +89,12 @@ This file is a handoff doc for continuing the Barbell Labs build in a new Claude
 | 106 | ✅ | Collapsible RPE pill (auto-collapse 1.8s after last value change) + Notes (collapse-on-blur with content, expand-on-tap with refocus) (PR #51). Fast-paced detection deferred — see deferred items memory. |
 | 107 | ❌ | Edit completed workouts from History — add/remove exercises, edit sets, recalculate PRs/tonnage on edit, lock date editing. Dedicated session. |
 | 217 | ✅ | **Rest timer manual default + Smart Rest Timer system** (PRs #58 + #59). Manual-start by default; new Settings → Workout Preferences sub-panel houses the Smart Rest Timer toggle (and migrates existing inline 1RM/Effort/Sound/Units prefs). Per-set ✓ button on every `SetRow` (`set.done` field). Unified trigger model when Smart is ON: "first signal after timer is idle starts it; later signals don't reset it." **Spec divergence:** spec mentioned per-exercise rest duration; app has only a single global preset — flag for future feature. |
-| 226 | 🔄 | **Workout data persistence — code complete on `fix-batch-47`, awaiting Brian's real-device test (iPhone 12+/iOS 17+, Samsung).** New `src/workoutSession/` module (db.js / persistence.js / recovery.js / lifecycle.js / index.js, ~370 lines). Dexie IndexedDB write-through on every workout state change + 10s heartbeat. Capacitor `appStateChange`/`pause` + web `visibilitychange`/`pagehide` listeners (4-layer defense). Recovery: <12h auto-restore silent, >12h prompt (Restore/Discard via ConfirmDialog, Discard archives to 7-day soft-delete store). Firestore offline persistence enabled in `firebase.js` via `initializeFirestore` + `persistentLocalCache`. **Sentry deferred** (Q1 was 'c' — file as #68 follow-up). |
+| 226 | ✅ | **Workout data persistence shipped (PR #60).** Dexie + Capacitor lifecycle + 12h auto-restore + 7d soft-delete graveyard + Firestore offline persistence. Real-device verification still pending. |
+| 218 | ✅ | Swipe-to-delete state persistence bug fixed via stable set + workout IDs (`fix-batch-48`). `makeId`/`normalizeWorkoutIds` helpers; React keys by identity. |
+| 220 | ✅ | Destructive-action audit verified — coverage comprehensive from PRs #48/#49. No gaps. |
+| 221 | ✅ | Finish Workout confirmation modal (`requestFinishWorkout`) with risk-tier messaging — half-filled sets = destructive variant, unmarked ✓ = warning, clean = soft confirm. |
+| 222 | ✅ | Finish button moved to sticky bottom bar above nav. Top button removed; celebration banner kept as visual cue. |
+| 223 | ✅ | Re-open recently finished workout (2-hour grace) — `finishedAt` timestamp on commit, History card renders Re-open button in window, blocks if active workout in flight. ConfirmDialog now supports single-button info mode. |
 | 227 | ⏳ | **Husky migration of pre-commit version-bump hook.** Hook lives only on Brian's laptop; desktop machine doesn't have it. Move into the repo so it travels with `git pull`. |
 
 ## Bonus work NOT on the 94-list (UX rebuild around active workout)

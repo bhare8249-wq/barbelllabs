@@ -82,6 +82,33 @@ const accentGlow = "rgba(91,155,213,0.20)";
 const TOAST_BOTTOM = "calc(140px + env(safe-area-inset-bottom, 0px))";
 const haptic = (pattern = 10) => { try { navigator.vibrate(pattern); } catch (_) {} };
 
+// Fix #218: stable IDs on sets + workouts. Previously sets were keyed by array index
+// in the React .map, so deleting set 3 of 5 caused React to reuse set 4's component
+// instance for the new "set 3" — carrying along stale local state (notably the
+// SwipeableRow's swipe offset). The visible bug: a swipe-revealed delete button that
+// stayed open after the row beside it was deleted. Same class of bug at the workout
+// level in History (WorkoutHistoryCard has its own swipe state). Stable IDs let React
+// reconcile by identity, not position.
+const makeId = () => {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  } catch (_) { /* fall through */ }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+};
+
+// Backfill helper for legacy data — workouts started before this fix don't have IDs
+// on their sets (or themselves). Called when a workout is loaded into active state
+// (startWorkout, template, repeat-last, recovery from IndexedDB). Idempotent: never
+// overwrites an existing id, never strips other fields.
+const normalizeWorkoutIds = (w) => {
+  if (!w) return w;
+  const exercises = (w.exercises || []).map(ex => ({
+    ...ex,
+    sets: (ex.sets || []).map(s => (s && s.id) ? s : { ...s, id: makeId() }),
+  }));
+  return { ...w, id: w.id || makeId(), exercises };
+};
+
 // Fix #77: lightweight Web-Audio tone player. Off by default — opt-in via Settings → Workout Preferences.
 // Reads the toggle from window so non-React callers can stay simple. Helpers update __bl_sound below.
 let __bl_audio_ctx = null;
@@ -194,8 +221,8 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.5.0";
-const BUILD_DATE  = "2026-05-06";
+const APP_VERSION = "2.6.0";
+const BUILD_DATE  = "2026-05-13";
 
 function useStorage(uid) {
   const [data, setData] = useState({ workouts: [], bodyweight: [] });
@@ -2295,7 +2322,8 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
         }
       }
     } else { haptic(10); }
-    onChange({ ...exercise, sets: [...exercise.sets, { weight: "", reps: "" }] });
+    // Fix #218: every set gets a stable id at creation so React keys by identity.
+    onChange({ ...exercise, sets: [...exercise.sets, { id: makeId(), weight: "", reps: "" }] });
   };
   // Focus-to-start trigger — fires when user taps a fresh empty set's input.
   // Uses if-idle so it never disrupts a running timer (preload mid-rest is safe).
@@ -2399,7 +2427,7 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
       )}
 
       <div style={{ marginBottom: 8 }}>
-        {exercise.sets.map((s, i) => <SetRow key={i} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} onMarkDone={handleSetMarkedDone} />)}
+        {exercise.sets.map((s, i) => <SetRow key={s.id || `legacy-${i}`} set={s} index={i} onChange={s => updateSet(i, s)} onRemove={() => removeSet(i)} effortMetric={effortMetric} onFirstFocus={handleFirstFocusOnEmpty} onMarkDone={handleSetMarkedDone} />)}
       </div>
       <button onClick={addSet} style={S.ghostBtn()}><Icon name="plus" size={14} /> Add Set</button>
       {/* "Just finished?" prompt — only the genuinely ambiguous case: timer running +
@@ -2491,7 +2519,7 @@ function groupWorkoutsByPeriod(workouts) {
   }));
 }
 
-function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTemplate, customTags }) {
+function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTemplate, onReopen, customTags }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [editingTags, setEditingTags] = useState(false);
@@ -2614,6 +2642,16 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
                   {ex.note && <div style={{ marginTop: 5, fontSize: 12, color: t.textMuted, fontStyle: "italic" }}>📝 {ex.note}</div>}
                 </div>
               ))}
+              {/* Fix #223: Re-open is available for 2 hours after a workout is
+                  finished. After that window the workout locks and edits go through
+                  the History edit flow (#107). The button only renders when the
+                  parent provides onReopen AND the workout still has a recent
+                  finishedAt timestamp. */}
+              {onReopen && workout.finishedAt && (Date.now() - workout.finishedAt) < (2 * 60 * 60 * 1000) && (
+                <button onClick={() => onReopen(workout)} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, border: "none", borderRadius: 10, color: "#fff", padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", marginTop: 4, marginBottom: 6, touchAction: "manipulation", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <Icon name="history" size={13} /> Re-open Workout
+                </button>
+              )}
               {onSaveTemplate && (
                 <button onClick={() => onSaveTemplate(workout)} style={{ width: "100%", background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 10, color: t.textMuted, padding: "9px 0", fontSize: 12, fontWeight: 600, cursor: "pointer", marginTop: 4, touchAction: "manipulation" }}>
                   ＋ Save as Template
@@ -3780,7 +3818,12 @@ function ConfirmDialog({ title, message, confirmLabel, cancelLabel = "Cancel", v
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: t.text, marginBottom: 8 }}>{title}</div>
         <div style={{ fontSize: 14, color: t.textSub, lineHeight: 1.5, marginBottom: 18 }}>{message}</div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 44, touchAction: "manipulation" }}>{cancelLabel}</button>
+          {/* Fix #223: empty cancelLabel turns this into an info / acknowledge modal
+              (single-button center). Used for "blocked" / "expired window" cases
+              where there's nothing for the user to cancel — they just need to ack. */}
+          {cancelLabel && (
+            <button onClick={onCancel} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textSub, borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 44, touchAction: "manipulation" }}>{cancelLabel}</button>
+          )}
           <button onClick={onConfirm} style={{ flex: 1, background: danger ? "linear-gradient(135deg, #D96B7A, #B0566A)" : `linear-gradient(135deg, ${accent}, #4A8BC4)`, border: "none", color: "#fff", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", minHeight: 44, touchAction: "manipulation" }}>{confirmLabel}</button>
         </div>
       </div>
@@ -5017,11 +5060,13 @@ export default function App() {
       const result = await checkForRecoverableWorkout(uid);
       if (cancelled) return;
       if (result.kind === "autoRestore") {
-        setWorkout(result.workout);
+        // Fix #218: normalize on load so legacy workouts (saved to IDB before this
+        // fix shipped) gain stable set ids before they hit the React tree.
+        setWorkout(normalizeWorkoutIds(result.workout));
         setView("log");
       } else if (result.kind === "prompt") {
         setRecoveryPrompt({
-          workout: result.workout,
+          workout: normalizeWorkoutIds(result.workout),
           summary: summarizeRecoverableWorkout(result.workout, result.ageMs),
         });
       }
@@ -5386,16 +5431,109 @@ export default function App() {
   const addExercise = (name) => {
     setWorkout(w => {
       const cur = w || { date: todayISO(), startTime: Date.now(), exercises: [] };
-      return { ...cur, exercises: [...cur.exercises, { name, sets: [{ weight: "", reps: "" }] }] };
+      // Fix #218: stamp the default first set with a stable id at creation.
+      return { ...cur, exercises: [...cur.exercises, { name, sets: [{ id: makeId(), weight: "", reps: "" }] }] };
     });
     setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all");
   };
+  // Fix #223: Re-open a workout finished within the last 2 hours. Pulls the
+  // workout off the History list and reactivates it as the in-flight session.
+  // If there's already an active workout, we block — the user has to finish or
+  // discard their current session first (Q4=a, less destructive than auto-
+  // replacing). The button in History only renders inside the 2h window so
+  // we don't have to re-check time here, but we re-verify to defend against
+  // race-y clock states or stale React state. The reactivated workout drops
+  // its finishedAt and any session-finalization metadata (duration recomputes
+  // on next finish). All other fields including labels and set ids carry over.
+  const reopenWorkout = (src) => {
+    if (!src) return;
+    if (workout) {
+      // Active workout in flight — block per Q4=a.
+      setConfirmDialog({
+        title: "Finish your current workout first",
+        message: "You have an active workout in progress. Finish or discard it before re-opening another.",
+        confirmLabel: "Got it",
+        cancelLabel: "",
+        variant: "primary",
+        onConfirm: () => setConfirmDialog(null),
+      });
+      return;
+    }
+    const ageMs = Date.now() - (src.finishedAt || 0);
+    if (!src.finishedAt || ageMs > (2 * 60 * 60 * 1000)) {
+      setConfirmDialog({
+        title: "Re-open window expired",
+        message: "Workouts can only be re-opened within 2 hours of finishing. Use the History edit tools for older sessions.",
+        confirmLabel: "OK",
+        cancelLabel: "",
+        variant: "primary",
+        onConfirm: () => setConfirmDialog(null),
+      });
+      return;
+    }
+    // Remove from history list and lift back into active state. Use stable id
+    // when available, fall back to startTime for legacy rows without an id.
+    const matchKey = src.id || src.startTime;
+    const remaining = data.workouts.filter(w => (w.id || w.startTime) !== matchKey);
+    save({ ...data, workouts: remaining }, { errorContext: "Couldn't re-open workout" });
+    // Strip finalization metadata; preserve everything else (sets, ids, labels, notes).
+    const { finishedAt, duration, ...rest } = src;
+    setWorkout(normalizeWorkoutIds(rest));
+    setView("log");
+    haptic([0, 30, 20, 30]);
+  };
+
+  // Fix #221: Finish workout is conceptually irreversible (#223 adds a 2-hour
+  // Re-open grace window in History, but the workout still commits to the user's
+  // history and ends the session). Wrap with a confirm. Message escalates when
+  // there's risk: incomplete sets (weight filled but no reps, or vice versa) or
+  // any set still marked done=false despite being filled. The clean case still
+  // confirms but with a softer message.
+  const requestFinishWorkout = () => {
+    if (!workout) return;
+    let incompleteCount = 0;
+    let unmarkedComplete = 0;
+    for (const ex of workout.exercises || []) {
+      for (const s of ex.sets || []) {
+        const hasWeight = s.weight !== "" && s.weight != null;
+        const hasReps   = s.reps   !== "" && s.reps   != null;
+        if (hasWeight !== hasReps) incompleteCount += 1;
+        if (hasWeight && hasReps && !s.done) unmarkedComplete += 1;
+      }
+    }
+    const risky = incompleteCount > 0;
+    const message = risky
+      ? `${incompleteCount} set${incompleteCount === 1 ? " is" : "s are"} half-filled and won't be saved. Finish anyway?`
+      : unmarkedComplete > 0
+        ? `${unmarkedComplete} set${unmarkedComplete === 1 ? "" : "s"} aren't marked done with ✓, but they have weight + reps and will be saved. Finish workout?`
+        : "All sets saved to history. The session ends but you can Re-open it for 2 hours from the History tab.";
+    setConfirmDialog({
+      title: "Finish workout?",
+      message,
+      confirmLabel: "Finish",
+      cancelLabel: "Keep going",
+      variant: risky ? "destructive" : "primary",
+      onConfirm: () => { setConfirmDialog(null); finishWorkout(); },
+    });
+  };
+
   const finishWorkout = () => {
     // Strip transient `done` flag — it's UI state for live workouts only.
     const cleanedExercises = workout.exercises.map(({ done, ...e }) => ({ ...e, sets: e.sets.filter(s => s.weight !== "" || s.reps !== "") })).filter(e => e.sets.length > 0);
     // Auto-apply suggested tags if none set (tag editor was removed from Log; users can still edit from History)
     const labels = (workout.labels && workout.labels.length) ? workout.labels : suggestTags(cleanedExercises);
-    const cleaned = { ...workout, labels, label: labels[0] || null, duration: Math.round((Date.now() - workout.startTime) / 60000), exercises: cleanedExercises };
+    // Fix #218: ensure workout id is set (preserves the id from active state if present,
+    //          otherwise makes one for legacy workouts that pre-date the fix).
+    // Fix #223: finishedAt timestamp drives the 2-hour Re-open grace window in History.
+    const cleaned = {
+      ...workout,
+      id: workout.id || makeId(),
+      finishedAt: Date.now(),
+      labels,
+      label: labels[0] || null,
+      duration: Math.round((Date.now() - workout.startTime) / 60000),
+      exercises: cleanedExercises,
+    };
     const prev = data.workouts;
     const notifUpdate = computeWorkoutNotifications(data, cleaned, prev);
     save({ ...data, workouts: [cleaned, ...data.workouts], ...(notifUpdate || {}) }, { errorContext: "Couldn't sync your workout" });
@@ -5571,7 +5709,16 @@ export default function App() {
   };
   const renameTemplate = (id, name) => save({ ...data, templates: templates.map(t => t.id === id ? { ...t, name } : t) });
   const loadTemplate = (tmpl) => {
-    setWorkout(prev => ({ ...(prev || { date: todayISO(), startTime: Date.now(), exercises: [] }), exercises: tmpl.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) }));
+    // Fix #218: templates pre-date stable-id support — generate IDs as the sets land
+    // in active workout state so the swipe / reconcile bug doesn't apply to
+    // template-started sessions.
+    setWorkout(prev => normalizeWorkoutIds({
+      ...(prev || { date: todayISO(), startTime: Date.now(), exercises: [] }),
+      exercises: tmpl.exercises.map(ex => ({
+        name: ex.name,
+        sets: ex.sets.map(s => ({ id: makeId(), weight: s.weight, reps: s.reps })),
+      })),
+    }));
     setView("log");
   };
 
@@ -5593,7 +5740,14 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={theme}>
     <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-      style={{ "--bl-surface": t.surfaceHigh, "--bl-border": t.border, "--bl-muted": t.textMuted, background: t.bg, minHeight: "100dvh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", transition: "background 0.3s, color 0.3s" }}>
+      style={{ "--bl-surface": t.surfaceHigh, "--bl-border": t.border, "--bl-muted": t.textMuted, background: t.bg, minHeight: "100dvh", color: t.text, fontFamily: "'DM Sans', sans-serif", maxWidth: 420, margin: "0 auto", position: "relative",
+        // Fix #222: when the sticky Finish bar is visible (active workout in Log view,
+        // picker closed, ≥1 exercise) we add ~70px to the scroll-bottom clearance so the
+        // last visible row isn't obscured. Otherwise stick with the nav-only clearance.
+        paddingBottom: (view === "log" && workout && workout.exercises.length > 0 && !showExPicker)
+          ? "calc(150px + env(safe-area-inset-bottom, 0px))"
+          : "calc(80px + env(safe-area-inset-bottom, 0px))",
+        transition: "background 0.3s, color 0.3s, padding-bottom 0.2s" }}>
       {completedWorkout && <WorkoutCompleteScreen workout={completedWorkout.workout} prevWorkouts={completedWorkout.prevWorkouts} onClose={() => setCompletedWorkout(null)} />}
 
       {/* ── ANIMATED VIEW WRAPPER ────────── */}
@@ -5716,28 +5870,10 @@ export default function App() {
                     <div style={{ fontSize: 12, color: "#5bb85b", fontWeight: 600, lineHeight: 1.4 }}>All exercises done — wrap up to save your session.</div>
                   </div>
                 )}
-                {!showExPicker && (
-                  <button onClick={finishWorkout} style={{
-                    width: "100%",
-                    background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
-                    border: "none",
-                    color: "#fff",
-                    borderRadius: 12,
-                    padding: allDone ? "16px 0" : "13px 0",
-                    fontFamily: "'Bebas Neue', cursive",
-                    fontSize: allDone ? 20 : 16,
-                    fontWeight: 700,
-                    letterSpacing: 1,
-                    marginBottom: 14,
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "none",
-                    transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s",
-                    touchAction: "manipulation",
-                  }}>
-                    <Icon name="check" size={allDone ? 18 : 16} /> Finish Workout
-                  </button>
-                )}
+                {/* Fix #222: top Finish button moved to sticky bottom bar (rendered
+                    near the nav further below). The "All exercises done" celebration
+                    banner stays here as a visual cue; the actual action lives on the
+                    bottom bar where the user's thumb already is. */}
               </>
             );
           })()}
@@ -5748,8 +5884,17 @@ export default function App() {
               {/* Repeat last session */}
               {data.workouts.length > 0 && (
                 <button onClick={() => {
+                  // Fix #218: stamp fresh ids on the copied sets (the source workout's ids
+                  // belong to the prior session — re-using them would conflate identities
+                  // across the React tree).
                   const last = data.workouts[0];
-                  setWorkout(w => ({ ...w, exercises: last.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) }));
+                  setWorkout(w => normalizeWorkoutIds({
+                    ...w,
+                    exercises: last.exercises.map(ex => ({
+                      name: ex.name,
+                      sets: ex.sets.map(s => ({ id: makeId(), weight: s.weight, reps: s.reps })),
+                    })),
+                  }));
                 }} style={{ width: "100%", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 14, color: t.textSub, padding: "13px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10, touchAction: "manipulation", letterSpacing: 0.3 }}>
                   <Icon name="history" size={14} /> Repeat Last Session
                 </button>
@@ -5854,7 +5999,7 @@ export default function App() {
               {/* Top-of-picker Finish button — lets the user wrap up without closing search first.
                   Always green to match 'Done with this exercise'. Only when workout has exercises. */}
               {workout && workout.exercises.length > 0 && (
-                <button onClick={finishWorkout} style={{
+                <button onClick={requestFinishWorkout} style={{
                   width: "100%",
                   background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
                   border: "none",
@@ -6091,7 +6236,9 @@ export default function App() {
                 </div>
               </div>
               {group.items.map(({ workout: w, index: i }) => (
-                <div key={i} id={`hcard-${i}`} style={{ scrollMarginTop: 48, animation: "bl-card-in 0.3s ease both", animationDelay: `${Math.min(i, 8) * 50}ms` }}>
+                /* Fix #218: stable key by workout identity so React reconciles the
+                   right WorkoutHistoryCard instance after a delete / filter / sort. */
+                <div key={w.id || w.startTime || `legacy-${i}`} id={`hcard-${i}`} style={{ scrollMarginTop: 48, animation: "bl-card-in 0.3s ease both", animationDelay: `${Math.min(i, 8) * 50}ms` }}>
                   <WorkoutHistoryCard workout={w} index={i}
                     customTags={data.customTags}
                     onLabelChange={(idx, arr) => { const wks = [...data.workouts]; wks[idx] = { ...wks[idx], labels: arr, label: arr[0] || null }; save({ ...data, workouts: wks }); }}
@@ -6101,6 +6248,7 @@ export default function App() {
                       const tmpl = { id: Date.now().toString(), name, exercises: src.exercises.map(ex => ({ name: ex.name, sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })) })) };
                       save({ ...data, templates: [...templates, tmpl] });
                     }}
+                    onReopen={reopenWorkout}
                   />
                 </div>
               ))}
@@ -6731,6 +6879,51 @@ export default function App() {
           }}>Sign Out</button>
         </div>
       )}
+
+      {/* Fix #222: sticky Finish Workout bar — sits above the nav, only visible
+          while logging an active workout with at least one exercise. Picker open
+          hides it (picker has its own contextual Finish button inside). Reachable
+          thumb position; replaces the previous top-of-Log Finish button so the
+          critical action is always one tap away regardless of scroll. */}
+      {view === "log" && workout && workout.exercises.length > 0 && !showExPicker && (() => {
+        const allDone = workout.exercises.every(e => e.done);
+        return (
+          <div style={{
+            position: "fixed",
+            bottom: "calc(58px + env(safe-area-inset-bottom, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "100%",
+            maxWidth: 420,
+            padding: "8px 12px",
+            background: theme === "dark" ? "linear-gradient(to top, rgba(10,10,10,0.96), rgba(10,10,10,0.86))" : "linear-gradient(to top, rgba(255,255,255,0.96), rgba(255,255,255,0.86))",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            zIndex: 90,
+            pointerEvents: "auto",
+          }}>
+            <button onClick={requestFinishWorkout} style={{
+              width: "100%",
+              background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
+              border: "none",
+              color: "#fff",
+              borderRadius: 12,
+              padding: allDone ? "16px 0" : "14px 0",
+              fontFamily: "'Bebas Neue', cursive",
+              fontSize: allDone ? 20 : 17,
+              fontWeight: 700,
+              letterSpacing: 1,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "0 4px 18px rgba(91,184,91,0.2)",
+              transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s",
+              touchAction: "manipulation",
+            }}>
+              <Icon name="check" size={allDone ? 18 : 16} /> Finish Workout
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ── NAV ──────────────────────────── */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 420, background: theme === "dark" ? "rgba(10,10,10,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderTop: `1px solid ${t.navBorder}`, display: "flex", paddingBottom: "env(safe-area-inset-bottom, 0px)", zIndex: 100 }}>
