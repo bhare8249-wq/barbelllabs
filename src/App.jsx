@@ -2174,9 +2174,15 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
       <SwipeableRow flat onDelete={onRemove} bgColor={rowBg}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {/* Fix #97: clickable type indicator. Cycles working → warmup → dropset.
-              For working sets it looks identical to the previous static index number. */}
+              For working sets it looks identical to the previous static index number.
+              touch events are stopped from bubbling so the SwipeableRow's gesture
+              detector doesn't mistake a tap-and-twitch on the indicator for a swipe
+              and leave the trash reveal partially open. */}
           <button
             onClick={cycleSetType}
+            onTouchStart={e => e.stopPropagation()}
+            onTouchMove={e => e.stopPropagation()}
+            onTouchEnd={e => e.stopPropagation()}
             aria-label={`Set ${index + 1} type: ${setType}. Tap to change.`}
             style={{
               width: 24, height: 24, padding: 0,
@@ -2233,7 +2239,9 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
           >
             <Icon name="check" size={14} />
           </button>
-          <button onClick={onRemove} aria-label="Remove set" style={{ background: "transparent", border: "none", color: "#ff5b5b", cursor: "pointer", width: 28, height: 36, minWidth: 28, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, flexShrink: 0, touchAction: "manipulation" }}><Icon name="x" size={14} /></button>
+          {/* Inline X delete button removed (Brian feedback): swipe-to-delete is the
+              only deletion path. Reduces accidental-delete risk and visual noise on
+              every set row. */}
         </div>
       </SwipeableRow>
 
@@ -4185,7 +4193,13 @@ function SwipeableRow({ children, onDelete, bgColor, borderColor, flat }) {
     onDelete();
   };
   const handleRowClick = (e) => {
-    if (offset !== 0 && !e.target.closest("button")) {
+    // Auto-close any open swipe-reveal as soon as the user taps anywhere on the row,
+    // including buttons. Previously the button check was meant to let users tap an
+    // inner button (✓, type indicator, RPE chip) without losing the swipe state —
+    // but in practice that just leaves the red trash reveal hanging next to a tapped
+    // button which looks broken (Brian feedback on #97). Tapping any control should
+    // dismiss the reveal.
+    if (offset !== 0) {
       e.stopPropagation();
       setOffset(0);
     }
