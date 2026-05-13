@@ -86,6 +86,7 @@
 | 95 | ⏳ | Remove auto-focus on Log search (verify if PR #45 covers it) |
 | 96 | ⏳ | Plate calculator visual rebuild |
 | 97 | ✅ | Warm-up + drop sets support — `set.type` field (working / warmup / dropset). One-tap cycle on the set-number indicator. Warmup ✓ skips timer auto-start; drop sets fire timer normally. Analytics: PRs working-only, tonnage/frequency exclude warmup. CSV column added. History shows W/D pills. |
+| 228 | ✅ | Apple-tier visual polish (`fix-batch-49`). Unified opacity-layered recipe across W/D pill, ✓ button, RPE chip, Coach card (now Steel Blue brand voice for all tones), ghost buttons, Rest Timer, sticky Finish bar. Inputs use translucent ghost layer with global Steel Blue `:focus` ring. Inline X delete removed; swipe-only. |
 | 98 | ⏳ | Profile saved toast positioning |
 | 99 | ⏳ | Bodyweight trend goal-aware |
 | 100 | ❌ | Firebase cloud sync new account — deferred |
