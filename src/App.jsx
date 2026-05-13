@@ -164,21 +164,28 @@ const playComplete  = () => { playTone(660, 100, "sine", 0.15); setTimeout(() =>
 const playRestDone  = () => { playTone(523, 100, "sine", 0.18); setTimeout(() => playTone(659, 100, "sine", 0.18), 110); setTimeout(() => playTone(784, 200, "sine", 0.20), 220); };
 
 const makeStyles = (t) => ({
+  // Apple-tier card: hairline white border + inset top highlight catches light from
+  // above, giving every card a subtle "lifted off the canvas" feel. Outer shadow
+  // unchanged. Single update → every consumer in the app picks this up for free.
   card: (extra = {}) => ({
     background: t.surfaceHigh, borderRadius: 18, padding: "18px 20px", marginBottom: 14,
-    border: `1px solid ${t.border}`, boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 24px rgba(0,0,0,0.22)",
     ...extra
   }),
   inputStyle: (extra = {}) => ({
     background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 12,
     color: t.text, padding: "13px 14px", fontSize: 16, outline: "none", width: 120,
-    transition: "border-color 0.2s", WebkitAppearance: "none",
+    transition: "border-color 0.2s, box-shadow 0.2s", WebkitAppearance: "none",
     ...extra
   }),
+  // Apple-tier icon button: subtle translucent press background appears on hover/tap
+  // via inline event handlers; default is invisible chrome. Keeps the tap target
+  // generous (44×44) but the resting state stays clean.
   iconBtn: (color) => ({
     background: "transparent", border: "none", cursor: "pointer",
     color: color || t.textMuted, padding: 10, display: "flex", alignItems: "center",
-    justifyContent: "center", borderRadius: 10, transition: "opacity 0.15s",
+    justifyContent: "center", borderRadius: 10, transition: "background 0.15s, color 0.15s, opacity 0.15s",
     minWidth: 44, minHeight: 44, touchAction: "manipulation",
   }),
   // Apple polish: ghost buttons no longer use dashed borders (that pattern read as
@@ -196,20 +203,32 @@ const makeStyles = (t) => ({
     transition: "background 0.18s, border-color 0.18s, color 0.18s",
     ...extra
   }),
+  // Apple-tier primary CTA: gradient + inset top highlight (lit-from-above) + soft
+  // outer glow. The 1px white inner line gives the button a subtle 3D edge that
+  // catches light, matching iOS Lock Screen action buttons.
   solidBtn: (extra = {}) => ({
     background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
     color: "#ffffff", border: "none", borderRadius: 14, padding: "15px 24px",
     fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-    letterSpacing: 0.3, fontSize: 16, boxShadow: `0 4px 20px ${accentGlow}`,
-    transition: "opacity 0.2s, transform 0.15s", touchAction: "manipulation",
+    letterSpacing: 0.3, fontSize: 16,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.16), 0 4px 20px ${accentGlow}`,
+    transition: "opacity 0.2s, transform 0.15s, box-shadow 0.2s",
+    touchAction: "manipulation",
     minHeight: 48,
     ...extra
   }),
+  // Apple-tier select: tinted Steel-Blue ghost with the opacity recipe. Inset
+  // top highlight catches light; soft border reads as a tappable affordance
+  // without being a hard frame.
   select: (extra = {}) => ({
-    background: t.surfaceHigh, color: accent, border: `1px solid ${accent}55`,
+    background: `${accent}14`,
+    color: accent,
+    border: `1px solid ${accent}55`,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07)",
     borderRadius: 12, padding: "10px 32px 10px 14px", fontSize: 13, fontWeight: 700,
     cursor: "pointer", outline: "none", appearance: "none", WebkitAppearance: "none",
     letterSpacing: 0.3, minHeight: 44,
+    transition: "background 0.18s, border-color 0.18s",
     ...extra
   }),
 });
@@ -255,7 +274,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.7.0";
+const APP_VERSION = "2.7.1";
 const BUILD_DATE  = "2026-05-13";
 
 function useStorage(uid) {
@@ -2492,7 +2511,19 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
     return (
       <button
         onClick={() => { onChange({ ...exercise, done: false }); onFocus?.(); }}
-        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid rgba(91,184,91,0.35)`, borderLeft: "3px solid #5bb85b", borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation", animation: "bl-done-in 0.85s cubic-bezier(0.22,1,0.36,1) both" }}
+        style={{
+          // Apple-tier done pill: subtle green tint + inset top highlight + 3px
+          // green left-edge accent. Reads as "settled" without being celebratory.
+          width: "100%", textAlign: "left",
+          background: "linear-gradient(to right, rgba(91,184,91,0.10), rgba(91,184,91,0.03) 60%, " + t.surfaceHigh + ")",
+          border: "1px solid rgba(91,184,91,0.28)",
+          borderLeft: "3px solid #5bb85b",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+          borderRadius: 12, padding: "12px 14px 12px 14px", marginBottom: 10,
+          display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation",
+          animation: "bl-done-in 0.85s cubic-bezier(0.22,1,0.36,1) both",
+          transition: "background 0.2s, border-color 0.2s",
+        }}
       >
         <span style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(91,184,91,0.18)", border: "1px solid rgba(91,184,91,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#5bb85b", flexShrink: 0 }}>
           <Icon name="check" size={14} />
@@ -2515,7 +2546,19 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
     return (
       <button
         onClick={() => onFocus?.()}
-        style={{ width: "100%", textAlign: "left", background: t.surfaceHigh, border: `1px solid ${accent}33`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation" }}
+        style={{
+          // Apple-tier queued pill: subtle Steel-Blue tint + inset top highlight +
+          // 3px accent on the left edge. Same recipe as the done pill but in
+          // brand color → tells the user "this is up next".
+          width: "100%", textAlign: "left",
+          background: `linear-gradient(to right, ${accent}10, ${accent}03 60%, ${t.surfaceHigh})`,
+          border: `1px solid ${accent}28`,
+          borderLeft: `3px solid ${accent}`,
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+          borderRadius: 12, padding: "12px 14px", marginBottom: 8,
+          display: "flex", alignItems: "center", gap: 12, cursor: "pointer", touchAction: "manipulation",
+          transition: "background 0.2s, border-color 0.2s",
+        }}
       >
         <span style={{ width: 28, height: 28, borderRadius: "50%", background: `${accent}1a`, border: `1px solid ${accent}55`, display: "flex", alignItems: "center", justifyContent: "center", color: accent, fontSize: 13, fontWeight: 700, flexShrink: 0, fontFamily: "'Bebas Neue', cursive" }}>
           {queueIndex != null ? queueIndex + 1 : <Icon name="plus" size={12} />}
@@ -2785,16 +2828,27 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
   const startOffset = useRef(0);
   const isDragging = useRef(false);
   const DELETE_W = 76;
+  const REOPEN_W = 92;
+
+  // Re-open is only meaningful within the 2-hour grace window (#223). Outside it,
+  // we don't show the green reveal at all — keeps the UI honest. The right-swipe
+  // gesture won't engage past 0 if there's no reopen path.
+  const canReopen = !!(onReopen && workout.finishedAt && (Date.now() - workout.finishedAt) < (2 * 60 * 60 * 1000));
 
   const mergedLabels = allLabels(customTags);
   const activeLabels = workout.labels ? workout.labels : workout.label ? [workout.label] : [];
   const activeCfgs = activeLabels.map(id => mergedLabels.find(l => l.id === id)).filter(Boolean).map(tagRenderCfg);
   const toggleLabel = (e, id) => {
     e.stopPropagation();
+    haptic(8); // #228 Pass 7: tag toggle is a meaningful state change
     let next = activeLabels.includes(id) ? activeLabels.filter(l => l !== id) : activeLabels.length >= TAG_CAP ? [...activeLabels.slice(1), id] : [...activeLabels, id];
     onLabelChange(index, next);
   };
 
+  // #228 Pass 6: bidirectional swipe — left reveals red Delete (existing), right
+  // reveals green Re-open (only when canReopen is true). Symmetric thresholds,
+  // rubber-band past the reveal width, snap-to-reveal on release past the
+  // half-threshold. Same gesture vocabulary as SwipeableRow on set rows.
   const onCardTouchStart = (e) => {
     swipeTouchX.current = e.touches[0].clientX;
     startOffset.current = swipeOffset;
@@ -2806,13 +2860,22 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
     if (Math.abs(dx) > 8) {
       isDragging.current = true;
       e.stopPropagation();
-      setSwipeOffset(Math.max(Math.min(startOffset.current + dx, 0), -DELETE_W));
+      let next = startOffset.current + dx;
+      // Allow positive offset only if Re-open is available; otherwise cap at 0.
+      if (canReopen) {
+        if (next > REOPEN_W) next = REOPEN_W;
+      } else {
+        if (next > 0) next = 0;
+      }
+      if (next < -DELETE_W) next = -DELETE_W;
+      setSwipeOffset(next);
     }
   };
   const onCardTouchEnd = (e) => {
     if (isDragging.current) {
       e.stopPropagation();
       if (swipeOffset < -DELETE_W / 2) { setSwipeOffset(-DELETE_W); haptic(10); }
+      else if (canReopen && swipeOffset > REOPEN_W / 2) { setSwipeOffset(REOPEN_W); haptic(10); }
       else setSwipeOffset(0);
     } else if (swipeOffset !== 0) {
       e.stopPropagation();
@@ -2823,7 +2886,21 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
 
   return (
     <div data-hswipe-safe style={{ position: "relative", marginBottom: 10, borderRadius: 14, overflow: "hidden" }}>
-      {/* Delete button revealed on swipe left */}
+      {/* Re-open reveal — sits on the LEFT edge, only renders within the 2h grace. */}
+      {canReopen && (
+        <div style={{
+          position: "absolute", left: 0, top: 0, bottom: 0, width: REOPEN_W,
+          background: "linear-gradient(135deg, #5bb85b, #3a8a3a)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          cursor: "pointer", borderRadius: "14px 0 0 14px",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
+        }}
+          onClick={() => { haptic([0, 60, 30, 60]); setSwipeOffset(0); onReopen(workout); }}>
+          <Icon name="history" size={18} />
+          <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: 0.3 }}>Re-open</span>
+        </div>
+      )}
+      {/* Delete reveal — sits on the RIGHT edge */}
       <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: DELETE_W, background: "#d55b5b", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", borderRadius: "0 14px 14px 0" }}
         onClick={() => { haptic([0, 60, 30, 60]); onDelete(index); }}>
         <Icon name="trash" size={18} />
@@ -3323,8 +3400,16 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
               <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2, lineHeight: 1.5 }}>When ON, the first thing you do after the timer is idle (tap a set's input, tap ✓, or hit Add Set) starts it — and once it's running, later actions don't reset it. Add Set with timer running asks "just finished?" so preloading mid-rest is safe. Off keeps it fully manual.</div>
             </div>
             <button
-              onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest })}
-              style={{ background: workoutPrefs?.autoStartRest ? accent : t.surface, border: `1px solid ${workoutPrefs?.autoStartRest ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.autoStartRest ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0, minHeight: 28 }}
+              onClick={() => { haptic(8); onWorkoutPrefs({ ...(workoutPrefs || {}), autoStartRest: !workoutPrefs?.autoStartRest }); }}
+              style={{
+                background: workoutPrefs?.autoStartRest ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : "rgba(255,255,255,0.04)",
+                border: `1px solid ${workoutPrefs?.autoStartRest ? `${accent}99` : "rgba(255,255,255,0.08)"}`,
+                boxShadow: workoutPrefs?.autoStartRest ? `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 10px ${accentGlow}` : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                borderRadius: 14, padding: "6px 16px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+                color: workoutPrefs?.autoStartRest ? "#fff" : t.textMuted,
+                cursor: "pointer", touchAction: "manipulation", flexShrink: 0, minHeight: 32,
+                transition: "background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s",
+              }}
               aria-pressed={!!workoutPrefs?.autoStartRest}
             >
               {workoutPrefs?.autoStartRest ? "ON" : "OFF"}
@@ -3344,7 +3429,16 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
             ].map(opt => {
               const active = (workoutPrefs?.oneRMFormula || "avg") === opt.id;
               return (
-                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), oneRMFormula: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "8px 6px", fontSize: 11, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, touchAction: "manipulation" }}>
+                <button key={opt.id} onClick={() => { haptic(8); onWorkoutPrefs({ ...(workoutPrefs || {}), oneRMFormula: opt.id }); }} style={{
+                  // Apple-tier segment: active = Steel-Blue gradient + inset highlight + soft glow.
+                  background: active ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${active ? `${accent}99` : "rgba(255,255,255,0.08)"}`,
+                  boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 10px ${accentGlow}` : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                  borderRadius: 10, padding: "9px 6px", fontSize: 11, fontWeight: 700, letterSpacing: 0.2,
+                  color: active ? "#fff" : t.textSub, cursor: "pointer",
+                  display: "flex", flexDirection: "column", gap: 2, touchAction: "manipulation",
+                  transition: "background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s",
+                }}>
                   <span>{opt.label}</span>
                   <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.8, fontFamily: "'Space Mono', monospace" }}>{opt.sub}</span>
                 </button>
@@ -3361,7 +3455,15 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
             ].map(opt => {
               const active = (workoutPrefs?.effortMetric || "rpe") === opt.id;
               return (
-                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                <button key={opt.id} onClick={() => { haptic(8); onWorkoutPrefs({ ...(workoutPrefs || {}), effortMetric: opt.id }); }} style={{
+                  background: active ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${active ? `${accent}99` : "rgba(255,255,255,0.08)"}`,
+                  boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 10px ${accentGlow}` : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                  borderRadius: 10, padding: "11px 8px", fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
+                  color: active ? "#fff" : t.textSub, cursor: "pointer",
+                  display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation",
+                  transition: "background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s",
+                }}>
                   <span>{opt.label}</span>
                   <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
                 </button>
@@ -3378,7 +3480,16 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
               <div style={{ fontSize: 12, color: t.textSub, fontWeight: 600 }}>Sound effects</div>
               <div style={{ fontSize: 10, color: t.textMuted, marginTop: 2 }}>Subtle tones on set complete, rest timer end, PR unlock.</div>
             </div>
-            <button onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound })} style={{ background: workoutPrefs?.sound ? accent : t.surface, border: `1px solid ${workoutPrefs?.sound ? accent : t.border}`, borderRadius: 14, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: workoutPrefs?.sound ? "#fff" : t.textMuted, cursor: "pointer", touchAction: "manipulation", flexShrink: 0 }}>
+            <button onClick={() => { haptic(8); onWorkoutPrefs({ ...(workoutPrefs || {}), sound: !workoutPrefs?.sound }); }} style={{
+              // Apple-tier ON/OFF: ON = Steel-Blue gradient + glow; OFF = translucent ghost.
+              background: workoutPrefs?.sound ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : "rgba(255,255,255,0.04)",
+              border: `1px solid ${workoutPrefs?.sound ? `${accent}99` : "rgba(255,255,255,0.08)"}`,
+              boxShadow: workoutPrefs?.sound ? `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 10px ${accentGlow}` : "inset 0 1px 0 rgba(255,255,255,0.04)",
+              borderRadius: 14, padding: "6px 16px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+              color: workoutPrefs?.sound ? "#fff" : t.textMuted,
+              cursor: "pointer", touchAction: "manipulation", flexShrink: 0,
+              transition: "background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s",
+            }}>
               {workoutPrefs?.sound ? "ON" : "OFF"}
             </button>
           </div>
@@ -3393,7 +3504,15 @@ function WorkoutPreferencesPanel({ workoutPrefs, onWorkoutPrefs, onClose }) {
             ].map(opt => {
               const active = (workoutPrefs?.units || "imperial") === opt.id;
               return (
-                <button key={opt.id} onClick={() => onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id })} style={{ background: active ? accent : t.surface, border: `1px solid ${active ? accent : t.border}`, borderRadius: 8, padding: "10px 8px", fontSize: 12, fontWeight: 700, color: active ? "#fff" : t.textSub, cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation" }}>
+                <button key={opt.id} onClick={() => { haptic(8); onWorkoutPrefs({ ...(workoutPrefs || {}), units: opt.id }); }} style={{
+                  background: active ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${active ? `${accent}99` : "rgba(255,255,255,0.08)"}`,
+                  boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 10px ${accentGlow}` : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                  borderRadius: 10, padding: "11px 8px", fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
+                  color: active ? "#fff" : t.textSub, cursor: "pointer",
+                  display: "flex", flexDirection: "column", gap: 2, textAlign: "left", touchAction: "manipulation",
+                  transition: "background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s",
+                }}>
                   <span>{opt.label}</span>
                   <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>{opt.sub}</span>
                 </button>
@@ -3459,7 +3578,15 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
         {/* Fix #55: Theme preference — System / Light / Dark */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>Appearance</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: 4 }}>
+          {/* Apple-tier segmented toggle: iOS-style "segmented control" — translucent
+              track + active segment lifts with gradient + inner highlight + soft glow. */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4,
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+            borderRadius: 12, padding: 4,
+          }}>
             {[
               { id: "system", label: "System", sub: "Matches OS" },
               { id: "light",  label: "Light",  icon: "sun" },
@@ -3467,7 +3594,16 @@ function SettingsModal({ authedUser, onClose, themePref, onThemeChoice, onEditPr
             ].map(opt => {
               const active = themePref === opt.id;
               return (
-                <button key={opt.id} onClick={() => onThemeChoice(opt.id)} style={{ background: active ? accent : "transparent", border: "none", color: active ? "#fff" : t.textSub, borderRadius: 9, padding: "10px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, touchAction: "manipulation" }}>
+                <button key={opt.id} onClick={() => { haptic(8); onThemeChoice(opt.id); }} style={{
+                  background: active ? `linear-gradient(135deg, ${accent}, #4A8BC4)` : "transparent",
+                  border: "none",
+                  boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 10px ${accentGlow}` : "none",
+                  color: active ? "#fff" : t.textSub,
+                  borderRadius: 9, padding: "10px 6px", fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+                  cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                  touchAction: "manipulation",
+                  transition: "background 0.2s, box-shadow 0.2s, color 0.2s",
+                }}>
                   {opt.icon ? <Icon name={opt.icon} size={14} /> : <span style={{ fontSize: 13 }}>⚙</span>}
                   {opt.label}
                 </button>
@@ -4109,8 +4245,8 @@ function ConfirmDialog({ title, message, confirmLabel, cancelLabel = "Cancel", v
   const danger = variant === "destructive";
   return (
     <div role="dialog" aria-modal="true" aria-label={title} style={{ position: "fixed", inset: 0, zIndex: 2300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={onCancel} />
-      <div style={{ position: "relative", maxWidth: 380, width: "100%", background: t.surfaceHigh, borderRadius: 16, padding: "20px 20px 18px", boxShadow: "0 20px 60px rgba(0,0,0,0.5)", border: `1px solid ${t.border}`, animation: "bl-card-in 0.25s ease both" }}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} onClick={onCancel} />
+      <div style={{ position: "relative", maxWidth: 380, width: "100%", background: t.surfaceHigh, borderRadius: 18, padding: "20px 20px 18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 20px 60px rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.06)", animation: "bl-card-in 0.25s ease both" }}>
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: t.text, marginBottom: 8 }}>{title}</div>
         <div style={{ fontSize: 14, color: t.textSub, lineHeight: 1.5, marginBottom: 18 }}>{message}</div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -4134,9 +4270,28 @@ function UndoToast({ message, onUndo, onDismiss, durationMs = 5000 }) {
     return () => clearTimeout(id);
   }, [onDismiss, durationMs]);
   return (
-    <div role="status" aria-live="polite" style={{ position: "fixed", bottom: TOAST_BOTTOM, left: 12, right: 12, zIndex: 2150, maxWidth: 396, marginLeft: "auto", marginRight: "auto", background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "10px 14px", color: t.text, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(0,0,0,0.45)", animation: "bl-card-in 0.25s ease both", display: "flex", alignItems: "center", gap: 10 }}>
+    <div role="status" aria-live="polite" style={{
+      // Apple-tier toast: backdrop blur + inset top highlight gives the floating
+      // card a "lit glass" feel above the content underneath.
+      position: "fixed", bottom: TOAST_BOTTOM, left: 12, right: 12, zIndex: 2150,
+      maxWidth: 396, marginLeft: "auto", marginRight: "auto",
+      background: "rgba(28,28,30,0.86)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      backdropFilter: "blur(20px) saturate(140%)",
+      WebkitBackdropFilter: "blur(20px) saturate(140%)",
+      borderRadius: 14, padding: "11px 14px", color: t.text, fontSize: 13, fontWeight: 600,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 32px rgba(0,0,0,0.45)",
+      animation: "bl-card-in 0.25s ease both",
+      display: "flex", alignItems: "center", gap: 10,
+    }}>
       <span style={{ flex: 1, lineHeight: 1.35 }}>{message}</span>
-      <button onClick={() => { onUndo(); onDismiss(); }} style={{ background: accent, border: "none", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, minHeight: 32, touchAction: "manipulation" }}>Undo</button>
+      <button onClick={() => { onUndo(); onDismiss(); }} style={{
+        background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
+        border: "none", color: "#fff", borderRadius: 8,
+        padding: "7px 14px", fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 10px ${accentGlow}`,
+        cursor: "pointer", flexShrink: 0, minHeight: 32, touchAction: "manipulation",
+      }}>Undo</button>
     </div>
   );
 }
@@ -5766,6 +5921,8 @@ export default function App() {
 
   const startWorkout = () => { if (!workout) setWorkout({ date: todayISO(), startTime: Date.now(), exercises: [] }); setView("log"); };
   const addExercise = (name) => {
+    // #228 Pass 7: haptic on every exercise add — primary "thing committed" moment.
+    haptic([0, 30, 20, 30]);
     setWorkout(w => {
       const cur = w || { date: todayISO(), startTime: Date.now(), exercises: [] };
       // Fix #218: stamp the default first set with a stable id at creation.
@@ -6403,7 +6560,27 @@ export default function App() {
                     const active = exCatFilter === c.id;
                     const darkText = active && c.color && ["#D4A64E", "#E8B64C"].includes(c.color);
                     return (
-                      <button key={c.id} onClick={() => setExCatFilter(c.id)} style={{ flexShrink: 0, padding: "10px 16px", borderRadius: 22, border: `1.5px solid ${active ? (c.color || accent) : t.border}`, background: active ? (c.color || accent) : t.surface, color: active ? (darkText ? "#111" : "#fff") : t.textSub, fontSize: 14, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none", scrollSnapAlign: "start" }}>{c.label}</button>
+                      <button key={c.id} onClick={() => { haptic(8); setExCatFilter(c.id); }} style={{
+                        // Apple-tier filter chip: when inactive, translucent ghost
+                        // (subtle white-on-dark layer + hairline border). When active,
+                        // category color tint + matching border + inset top highlight.
+                        flexShrink: 0,
+                        padding: "10px 16px",
+                        borderRadius: 22,
+                        border: `1px solid ${active ? (c.color || accent) + "99" : "rgba(255,255,255,0.08)"}`,
+                        background: active
+                          ? `${c.color || accent}26`
+                          : "rgba(255,255,255,0.04)",
+                        boxShadow: active
+                          ? "inset 0 1px 0 rgba(255,255,255,0.10)"
+                          : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                        color: active ? (c.color || accent) : t.textSub,
+                        fontSize: 14, fontWeight: 600, letterSpacing: 0.2,
+                        cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap",
+                        minHeight: 44,
+                        transition: "background 0.18s, border-color 0.18s, color 0.18s",
+                        userSelect: "none", scrollSnapAlign: "start",
+                      }}>{c.label}</button>
                     );
                   })}
                 </div>
@@ -6416,7 +6593,23 @@ export default function App() {
                   {orderedEquips.map(eq => {
                     const active = exEquipFilter === eq.id;
                     return (
-                      <button key={eq.id} onClick={() => setExEquipFilter(eq.id)} style={{ flexShrink: 0, padding: "9px 15px", borderRadius: 22, border: `1.5px solid ${active ? accent : t.border}`, background: active ? `${accent}20` : t.surface, color: active ? accent : t.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap", minHeight: 44, transition: "all 0.15s", userSelect: "none", scrollSnapAlign: "start" }}>{eq.label}</button>
+                      <button key={eq.id} onClick={() => { haptic(8); setExEquipFilter(eq.id); }} style={{
+                        // Apple-tier filter chip — same recipe as category chips, narrower.
+                        flexShrink: 0,
+                        padding: "9px 15px",
+                        borderRadius: 22,
+                        border: `1px solid ${active ? `${accent}99` : "rgba(255,255,255,0.08)"}`,
+                        background: active ? `${accent}26` : "rgba(255,255,255,0.04)",
+                        boxShadow: active
+                          ? "inset 0 1px 0 rgba(255,255,255,0.10)"
+                          : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                        color: active ? accent : t.textMuted,
+                        fontSize: 13, fontWeight: 600, letterSpacing: 0.2,
+                        cursor: "pointer", touchAction: "pan-y", whiteSpace: "nowrap",
+                        minHeight: 44,
+                        transition: "background 0.18s, border-color 0.18s, color 0.18s",
+                        userSelect: "none", scrollSnapAlign: "start",
+                      }}>{eq.label}</button>
                     );
                   })}
                 </div>
@@ -6550,7 +6743,14 @@ export default function App() {
             )}
             {/* Active-filter banner */}
             {hasFilter && (
-              <div style={{ marginTop: 10, padding: "8px 12px", background: `${accent}10`, border: `1px solid ${accent}40`, borderRadius: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{
+                // Apple-tier active-filter banner: tinted Steel-Blue with inset top highlight.
+                marginTop: 10, padding: "9px 14px",
+                background: `${accent}14`,
+                border: `1px solid ${accent}33`,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+                borderRadius: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+              }}>
                 <span style={{ fontSize: 11, color: accent, fontWeight: 700 }}>
                   {filteredWorkouts.length} match{filteredWorkouts.length !== 1 ? "es" : ""}
                 </span>
@@ -7065,7 +7265,7 @@ export default function App() {
         onExport={() => { setShowSettings(false); exportCSV(); }}
         workoutPrefs={data.workoutPrefs || {}}
         onWorkoutPrefs={(next) => save({ ...data, workoutPrefs: next })}
-        onOpenWorkoutPrefs={() => setShowWorkoutPrefs(true)}
+        onOpenWorkoutPrefs={() => { haptic(8); setShowWorkoutPrefs(true); }}
         onDeleteAccount={() => { setShowSettings(false); setShowDeleteAccount(true); }}
         consentActive={!!(readLocalConsent() || data?.privacyConsent?.acceptedAt)}
         onWithdrawConsent={() => { withdrawConsent({ data, save }); setShowSettings(false); }}
