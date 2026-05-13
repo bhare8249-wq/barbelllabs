@@ -96,15 +96,36 @@ const makeId = () => {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 };
 
-// Backfill helper for legacy data — workouts started before this fix don't have IDs
-// on their sets (or themselves). Called when a workout is loaded into active state
-// (startWorkout, template, repeat-last, recovery from IndexedDB). Idempotent: never
-// overwrites an existing id, never strips other fields.
+// Backfill helper for legacy data. Originally for #218 stable ids; extended in #97
+// to also default the set.type field. Called when a workout is loaded into active
+// state (startWorkout, template, repeat-last, recovery from IndexedDB) AND when
+// analytics / history code reads sets that may be legacy. Idempotent — never
+// overwrites an existing id or type, never strips other fields.
+//
+// set.type values: "working" (default), "warmup", "dropset".
+// Legacy sets without the field are working sets by convention.
+const SET_TYPES = ["working", "warmup", "dropset"];
+const isValidSetType = (t) => SET_TYPES.includes(t);
+
+// Fix #97: analytics predicates.
+//   isWorking      — strict "working set" — for PRs, top-set detection, e1RM
+//                     calculations, anything that wants the user's max effort.
+//   isNonWarmup    — "set that counts toward volume / frequency / tonnage"
+//                     i.e. working + dropset. Warmups never count toward these
+//                     because they're prep, not training stimulus.
+// Legacy sets without `type` count as working, so they pass both predicates.
+const isWorking   = (s) => !s.type || s.type === "working";
+const isNonWarmup = (s) => !s.type || s.type !== "warmup";
 const normalizeWorkoutIds = (w) => {
   if (!w) return w;
   const exercises = (w.exercises || []).map(ex => ({
     ...ex,
-    sets: (ex.sets || []).map(s => (s && s.id) ? s : { ...s, id: makeId() }),
+    sets: (ex.sets || []).map(s => {
+      const next = { ...s };
+      if (!next.id) next.id = makeId();
+      if (!isValidSetType(next.type)) next.type = "working";
+      return next;
+    }),
   }));
   return { ...w, id: w.id || makeId(), exercises };
 };
@@ -221,7 +242,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.6.0";
+const APP_VERSION = "2.7.0";
 const BUILD_DATE  = "2026-05-13";
 
 function useStorage(uid) {
@@ -744,7 +765,9 @@ function coachFor(exerciseName, workouts) {
     .filter(w => w.exercises?.some(e => e.name === exerciseName))
     .map(w => {
       const ex = w.exercises.find(e => e.name === exerciseName);
-      const topSet = ex.sets.reduce((best, s) => {
+      // Fix #97: top set / PR detection uses working sets only. Drop sets (which deload
+      // mid-set) and warmups (which precede the working sets) can't be PRs.
+      const topSet = ex.sets.filter(isWorking).reduce((best, s) => {
         const wt = parseFloat(s.weight), rp = parseFloat(s.reps);
         if (!wt || !rp) return best;
         if (!best) return { weight: wt, reps: rp, rpe: s.rpe, rir: s.rir };
@@ -1541,8 +1564,10 @@ function VolumeBarChart({ workouts }) {
       const day = d.getDay();
       const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7));
       const key = mon.toISOString().slice(0, 10);
+      // Fix #97: weekly volume excludes warmup sets (training stimulus only). Drop sets
+      // count because they're real working sets at reduced load.
       const vol = w.exercises.reduce((sum, ex) =>
-        sum + ex.sets.reduce((s2, s) =>
+        sum + ex.sets.filter(isNonWarmup).reduce((s2, s) =>
           s2 + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0), 0), 0);
       map[key] = (map[key] || 0) + vol;
     });
@@ -2086,8 +2111,24 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     const goingDone = !set.done;
     onChange({ ...set, done: goingDone });
     haptic(goingDone ? [0, 30, 20, 30] : 8);
-    if (goingDone) onMarkDone?.();
+    // Fix #97: pass set.type to the parent so it can decide whether to fire the rest
+    // timer auto-start. Warmup sets typically don't need rest, so the parent skips
+    // the timer event for them (ding still plays — completion feedback is universal).
+    if (goingDone) onMarkDone?.(set.type);
   };
+  // Fix #97: per-set type indicator. Default "working" sets render exactly like before
+  // (just the set number, no visual chrome) — sleek for the 90%+ case. Warmup and
+  // dropset show a small colored pill with "W" or "D" in place of the number. Tap
+  // cycles the type: working → warmup → dropset → working. The chip-as-set-number
+  // pattern avoids adding another control to the already-busy row.
+  const setType = isValidSetType(set.type) ? set.type : "working";
+  const cycleSetType = () => {
+    const next = setType === "working" ? "warmup" : setType === "warmup" ? "dropset" : "working";
+    onChange({ ...set, type: next });
+    haptic(8);
+  };
+  const typeColor = setType === "warmup" ? "#E8B547" : setType === "dropset" ? "#FF7849" : t.textMuted;
+  const typeLabel = setType === "warmup" ? "W" : setType === "dropset" ? "D" : (index + 1).toString();
   const rpe = set.rpe != null ? parseFloat(set.rpe) : null;
   const rir = set.rir != null ? parseFloat(set.rir) : (rpe != null ? Math.round(10 - rpe) : null);
   const hasRpe = rpe != null;
@@ -2122,7 +2163,27 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     <div style={{ marginBottom: 8 }}>
       <SwipeableRow flat onDelete={onRemove} bgColor={t.surfaceHigh}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ width: 18, color: t.textMuted, fontSize: 13, textAlign: "center", flexShrink: 0 }}>{index + 1}</span>
+          {/* Fix #97: clickable type indicator. Cycles working → warmup → dropset.
+              For working sets it looks identical to the previous static index number. */}
+          <button
+            onClick={cycleSetType}
+            aria-label={`Set ${index + 1} type: ${setType}. Tap to change.`}
+            style={{
+              width: 24, height: 24, padding: 0,
+              background: setType === "working" ? "transparent" : `${typeColor}1f`,
+              border: setType === "working" ? "none" : `1px solid ${typeColor}66`,
+              borderRadius: 6,
+              color: typeColor,
+              fontSize: 13,
+              fontWeight: setType === "working" ? 400 : 800,
+              letterSpacing: setType === "working" ? 0 : 0.4,
+              cursor: "pointer",
+              flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              touchAction: "manipulation",
+              transition: "background 0.15s, border-color 0.15s, color 0.15s",
+            }}
+          >{typeLabel}</button>
           <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
           <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
           <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
@@ -2323,7 +2384,10 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
       }
     } else { haptic(10); }
     // Fix #218: every set gets a stable id at creation so React keys by identity.
-    onChange({ ...exercise, sets: [...exercise.sets, { id: makeId(), weight: "", reps: "" }] });
+    // Fix #97: inherit set.type from the previous set so warmup-then-warmup-then-working
+    // doesn't require re-tagging each one. Defaults to "working" when there's no prior.
+    const prevType = (last && isValidSetType(last.type)) ? last.type : "working";
+    onChange({ ...exercise, sets: [...exercise.sets, { id: makeId(), type: prevType, weight: "", reps: "" }] });
   };
   // Focus-to-start trigger — fires when user taps a fresh empty set's input.
   // Uses if-idle so it never disrupts a running timer (preload mid-rest is safe).
@@ -2335,9 +2399,16 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
   // an already-running rest cycle doesn't lose elapsed seconds — preserves accurate
   // 1:30-from-walk-back timing across every workflow. The Add Set prompt's "Yes, reset"
   // is the only auto path that force-resets a running timer.
-  const handleSetMarkedDone = () => {
+  //
+  // Fix #97: receives the set type from SetRow. Warmup sets ding the same as any
+  // completed set (positive feedback is universal) but do NOT fire the rest-timer
+  // auto-start — warmups conventionally have minimal rest, and auto-starting a 90s
+  // timer between back-to-back warmup sets would be wrong. Drop sets DO fire the
+  // timer because the rest period after a drop set is real working rest.
+  const handleSetMarkedDone = (setType) => {
     playDing();
     if (!autoStartRest) return;
+    if (setType === "warmup") return;
     window.dispatchEvent(new Event("gt-start-timer-if-idle"));
   };
   const updateSet = (i, s) => { const sets = [...exercise.sets]; sets[i] = s; onChange({ ...exercise, sets }); };
@@ -2631,14 +2702,33 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
               {workout.exercises.map((ex, j) => (
                 <div key={j} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: j < workout.exercises.length - 1 ? `1px solid ${t.border}` : "none" }}>
                   <div style={{ color: accent, fontSize: 13, fontWeight: 700, marginBottom: 5 }}>{ex.name}</div>
-                  {ex.sets.map((s, k) => (
-                    <div key={k} style={{ display: "flex", gap: 8, fontSize: 13 }}>
-                      <span style={{ color: t.textMuted, width: 18 }}>{k + 1}.</span>
-                      <span style={{ color: t.textSub }}>{s.weight} lbs</span>
-                      <span style={{ color: t.textMuted }}>×</span>
-                      <span style={{ color: t.textSub }}>{s.reps} reps</span>
-                    </div>
-                  ))}
+                  {/* Fix #97: render small W/D pill for non-working sets so history
+                      reflects the same type tagging the user did at log time. Working
+                      sets remain visually clean (just the index number). */}
+                  {ex.sets.map((s, k) => {
+                    const setType = isValidSetType(s.type) ? s.type : "working";
+                    const tColor = setType === "warmup" ? "#E8B547" : setType === "dropset" ? "#FF7849" : t.textMuted;
+                    const indexLabel = setType === "warmup" ? "W" : setType === "dropset" ? "D" : `${k + 1}.`;
+                    return (
+                      <div key={s.id || k} style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "center" }}>
+                        <span style={{
+                          color: tColor,
+                          width: 22,
+                          textAlign: "center",
+                          fontWeight: setType === "working" ? 400 : 700,
+                          fontSize: setType === "working" ? 13 : 11,
+                          letterSpacing: setType === "working" ? 0 : 0.4,
+                          background: setType === "working" ? "transparent" : `${tColor}1f`,
+                          border: setType === "working" ? "none" : `1px solid ${tColor}55`,
+                          borderRadius: 4,
+                          padding: setType === "working" ? 0 : "1px 0",
+                        }}>{indexLabel}</span>
+                        <span style={{ color: t.textSub }}>{s.weight} lbs</span>
+                        <span style={{ color: t.textMuted }}>×</span>
+                        <span style={{ color: t.textSub }}>{s.reps} reps</span>
+                      </div>
+                    );
+                  })}
                   {ex.note && <div style={{ marginTop: 5, fontSize: 12, color: t.textMuted, fontStyle: "italic" }}>📝 {ex.note}</div>}
                 </div>
               ))}
@@ -3638,8 +3728,11 @@ function WorkoutCompleteScreen({ workout, prevWorkouts, onClose }) {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [onClose]); // eslint-disable-line
 
-  const totalSets = workout.exercises.reduce((n, ex) => n + ex.sets.length, 0);
-  const totalReps = workout.exercises.reduce((n, ex) => n + ex.sets.reduce((s, set) => s + (parseInt(set.reps) || 0), 0), 0);
+  // Fix #97: post-workout summary counts working + drop sets (training stimulus).
+  // Warmups are excluded so the celebration screen reflects what actually trained
+  // the user.
+  const totalSets = workout.exercises.reduce((n, ex) => n + ex.sets.filter(isNonWarmup).length, 0);
+  const totalReps = workout.exercises.reduce((n, ex) => n + ex.sets.filter(isNonWarmup).reduce((s, set) => s + (parseInt(set.reps) || 0), 0), 0);
   const prs = [];
   workout.exercises.forEach(ex => {
     const best = Math.max(0, ...ex.sets.map(s => parseFloat(s.weight) || 0));
@@ -5432,7 +5525,10 @@ export default function App() {
     setWorkout(w => {
       const cur = w || { date: todayISO(), startTime: Date.now(), exercises: [] };
       // Fix #218: stamp the default first set with a stable id at creation.
-      return { ...cur, exercises: [...cur.exercises, { name, sets: [{ id: makeId(), weight: "", reps: "" }] }] };
+      // Fix #97: default type is "working" (the explicit type field keeps legacy
+      // analytics simple — no field means working too, but we set it explicitly so
+      // serialization is unambiguous).
+      return { ...cur, exercises: [...cur.exercises, { name, sets: [{ id: makeId(), type: "working", weight: "", reps: "" }] }] };
     });
     setShowExPicker(false); setExSearch(""); setExCatFilter("all"); setExEquipFilter("all");
   };
@@ -5629,7 +5725,10 @@ export default function App() {
       const hit = findLabel(id, data.customTags);
       return hit ? hit.label : id;
     };
-    const header = ["Date", "Workout Name", "Tags", "Exercise", "Set #", "Weight (lbs)", "Reps", "RPE", "Notes", "Duration (min)"];
+    // Fix #97: added "Set Type" column. Values: working / warmup / dropset.
+    // Legacy sets without the field export as "working" so downstream analysis
+    // tools don't have to handle blank-vs-working as a special case.
+    const header = ["Date", "Workout Name", "Tags", "Exercise", "Set #", "Set Type", "Weight (lbs)", "Reps", "RPE", "Notes", "Duration (min)"];
     const rows = [header];
     workouts.forEach(w => {
       const labels = w.labels || (w.label ? [w.label] : []);
@@ -5638,13 +5737,13 @@ export default function App() {
       const tagsCell = tagNames.join(", ");
       const duration = (w.duration != null) ? w.duration : "";
       if (!w.exercises || w.exercises.length === 0) {
-        rows.push([w.date, workoutName, tagsCell, "", "", "", "", "", "", duration]);
+        rows.push([w.date, workoutName, tagsCell, "", "", "", "", "", "", "", duration]);
         return;
       }
       w.exercises.forEach(ex => {
         const note = ex.note || "";
         if (!ex.sets || ex.sets.length === 0) {
-          rows.push([w.date, workoutName, tagsCell, ex.name, "", "", "", "", note, duration]);
+          rows.push([w.date, workoutName, tagsCell, ex.name, "", "", "", "", "", note, duration]);
           return;
         }
         ex.sets.forEach((s, i) => {
@@ -5654,6 +5753,7 @@ export default function App() {
             tagsCell,
             ex.name,
             i + 1,
+            isValidSetType(s.type) ? s.type : "working",
             s.weight,
             s.reps,
             (s.rpe != null) ? s.rpe : "",
@@ -6591,8 +6691,11 @@ export default function App() {
                 {(() => {
                   const ws = data.workouts;
                   const totalWorkouts = ws.length;
-                  const totalSets = ws.reduce((a, w) => a + w.exercises.reduce((b, e) => b + e.sets.length, 0), 0);
-                  const totalVolume = ws.reduce((a, w) => a + w.exercises.reduce((b, e) => b + e.sets.reduce((c, s) => c + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0), 0), 0), 0);
+                  // Fix #97: lifetime totals reflect training stimulus — working +
+                  // drop sets only. Warmups are excluded so cumulative volume and set
+                  // counts don't get inflated by prep work.
+                  const totalSets = ws.reduce((a, w) => a + w.exercises.reduce((b, e) => b + e.sets.filter(isNonWarmup).length, 0), 0);
+                  const totalVolume = ws.reduce((a, w) => a + w.exercises.reduce((b, e) => b + e.sets.filter(isNonWarmup).reduce((c, s) => c + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0), 0), 0), 0);
                   const totalMinutes = ws.reduce((a, w) => a + (w.duration || 0), 0);
                   const currentStreak = calcStreak(ws);
                   // Longest streak across entire history
