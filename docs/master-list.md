@@ -85,7 +85,7 @@
 |---|--------|------|
 | 95 | ⏳ | Remove auto-focus on Log search (verify if PR #45 covers it) |
 | 96 | ⏳ | Plate calculator visual rebuild |
-| 97 | ⏳ | Warm-up + drop sets support (data model + analytics + UI + CSV column) |
+| 97 | ✅ | Warm-up + drop sets support — `set.type` field (working / warmup / dropset). One-tap cycle on the set-number indicator. Warmup ✓ skips timer auto-start; drop sets fire timer normally. Analytics: PRs working-only, tonnage/frequency exclude warmup. CSV column added. History shows W/D pills. |
 | 98 | ⏳ | Profile saved toast positioning |
 | 99 | ⏳ | Bodyweight trend goal-aware |
 | 100 | ❌ | Firebase cloud sync new account — deferred |

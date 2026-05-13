@@ -1,5 +1,5 @@
 # Barbell Labs — Session Brief (Save Point)
-**Last updated:** 2026-05-13 · **Version:** 2.6.0 · **#226 merged (PR #60). `fix-batch-48` open with the workout safety bundle (#218 + #220 + #221 + #222 + #223). Real-device test for #226 still pending.**
+**Last updated:** 2026-05-13 · **Version:** 2.7.0 · **Workout safety bundle merged (PR #61). `fix-batch-49` open with #97 — Warm-up + drop set support (data model, UI, analytics, CSV, history). Real-device test for #226 still pending.**
 
 > ⚠️ **Pre-commit version-bump hook is missing on the desktop machine** (`.git/hooks/pre-commit` only has `.sample` files locally). Hook lives on the laptop only — git hooks don't travel with the repo. **Filed as #227** for migration to Husky. Until then, version bumps are manual on this machine. `fix-batch-48` was bumped manually to `2.6.0`.
 
@@ -95,6 +95,7 @@ This file is a handoff doc for continuing the Barbell Labs build in a new Claude
 | 221 | ✅ | Finish Workout confirmation modal (`requestFinishWorkout`) with risk-tier messaging — half-filled sets = destructive variant, unmarked ✓ = warning, clean = soft confirm. |
 | 222 | ✅ | Finish button moved to sticky bottom bar above nav. Top button removed; celebration banner kept as visual cue. |
 | 223 | ✅ | Re-open recently finished workout (2-hour grace) — `finishedAt` timestamp on commit, History card renders Re-open button in window, blocks if active workout in flight. ConfirmDialog now supports single-button info mode. |
+| 97  | ✅ | **Warm-up + drop set support** (`fix-batch-49`). `set.type` ∈ {working,warmup,dropset}. Sleek-by-default: working sets render unchanged, only tagged sets show a W/D pill. One-tap cycle on the set-number indicator. Warmup ✓ skips rest-timer auto-start; drop sets trigger normally. Analytics: PRs working-only; tonnage / frequency exclude warmups. CSV gets new "Set Type" column. History rows show W/D pill in the same scheme. WarmupCalculator integration deferred (it's reference-only — no auto-insert button to pre-tag yet). |
 | 227 | ⏳ | **Husky migration of pre-commit version-bump hook.** Hook lives only on Brian's laptop; desktop machine doesn't have it. Move into the repo so it travels with `git pull`. |
 
 ## Bonus work NOT on the 94-list (UX rebuild around active workout)
