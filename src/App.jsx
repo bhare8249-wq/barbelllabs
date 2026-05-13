@@ -51,8 +51,11 @@ const THEMES = {
     text:        "#F0F4F8",
     textSub:     "#A8C8E8",
     textMuted:   "#5B7A96",
-    inputBg:     "#141416",
-    inputBorder: "#2C2C30",
+    // Apple-tier polish: inputs feel "lifted" not "recessed". Subtle white
+    // overlay catches light off the dark background; near-invisible border
+    // until the global :focus rule paints a Steel Blue accent ring.
+    inputBg:     "rgba(255,255,255,0.04)",
+    inputBorder: "rgba(255,255,255,0.08)",
     navBg:       "#0A0A0A",
     navBorder:   "#1C1C1E",
   },
@@ -66,8 +69,10 @@ const THEMES = {
     text:        "#0A0A0A",
     textSub:     "#2A4A6A",
     textMuted:   "#5B7A96",
-    inputBg:     "#FFFFFF",
-    inputBorder: "#A8C8E8",
+    // Apple-tier polish: matching depth in light mode — soft layered surface
+    // over the card, hairline border, accent ring on focus.
+    inputBg:     "rgba(255,255,255,0.62)",
+    inputBorder: "rgba(91,155,213,0.18)",
     navBg:       "#FFFFFF",
     navBorder:   "#A8C8E8",
   },
@@ -176,11 +181,19 @@ const makeStyles = (t) => ({
     justifyContent: "center", borderRadius: 10, transition: "opacity 0.15s",
     minWidth: 44, minHeight: 44, touchAction: "manipulation",
   }),
+  // Apple polish: ghost buttons no longer use dashed borders (that pattern read as
+  // unfinished / placeholder). New recipe is a subtle translucent fill with a
+  // hairline border — same understated weight, more refined silhouette. The dash
+  // disappears, the affordance stays.
   ghostBtn: (extra = {}) => ({
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "transparent",
-    border: `1.5px dashed ${t.border}`, borderRadius: 14, color: t.textMuted,
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+    borderRadius: 14, color: t.textMuted,
     padding: "13px 16px", fontSize: 14, cursor: "pointer", minHeight: 48,
-    transition: "border-color 0.2s, color 0.2s",
+    fontWeight: 600, letterSpacing: 0.2,
+    transition: "background 0.18s, border-color 0.18s, color 0.18s",
     ...extra
   }),
   solidBtn: (extra = {}) => ({
@@ -1200,29 +1213,69 @@ function RestTimer() {
   if (!expanded) {
     const dotColor = done ? "#5bb85b" : running ? accent : t.textMuted;
     const isPaused = pausedRemaining != null;
+    // Apple polish: compact rest timer.
+    //   - Bigger time digits (was 22 → 26), Bebas Neue letterspaced
+    //   - Hairline border + top inner highlight for depth
+    //   - Primary button uses the same Steel Blue gradient as Add Exercise / Coach Apply
+    //   - Pause / Reset buttons use the new opacity ghost recipe
     return (
-      <div style={{ background: t.surfaceHigh, border: `1px solid ${done ? "rgba(91,184,91,0.4)" : t.border}`, borderRadius: 12, padding: "8px 10px 8px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, animation: running ? "bl-card-in 1s ease-in-out infinite alternate" : "none" }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: t.textMuted, letterSpacing: 0.6, textTransform: "uppercase" }}>Rest</span>
-        <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 1, color: done ? "#5bb85b" : (running ? t.text : t.textSub), lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+      <div style={{
+        background: t.surfaceHigh,
+        border: `1px solid ${done ? "rgba(91,184,91,0.4)" : "rgba(255,255,255,0.08)"}`,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+        borderRadius: 14,
+        padding: "10px 12px 10px 16px",
+        marginBottom: 14,
+        display: "flex", alignItems: "center", gap: 12,
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, animation: running ? "bl-card-in 1s ease-in-out infinite alternate" : "none", boxShadow: running ? `0 0 12px ${dotColor}` : "none" }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, letterSpacing: 0.9, textTransform: "uppercase" }}>Rest</span>
+        <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 26, letterSpacing: 1.2, color: done ? "#5bb85b" : (running ? t.text : t.textSub), lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
           {done ? "✓" : fmt(remaining)}
         </span>
         {done && <span style={{ fontSize: 11, color: "#5bb85b", fontWeight: 600, flex: 1 }}>Rest complete</span>}
         {!done && <div style={{ flex: 1 }} />}
         {!running && !done && (
-          <button onClick={isPaused ? resume : start} style={{ background: accent, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>{isPaused ? "Resume" : "Start"}</button>
+          <button onClick={isPaused ? resume : start} style={{
+            background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
+            color: "#fff", border: "none", borderRadius: 10,
+            padding: "8px 16px", fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 12px ${accentGlow}`,
+            cursor: "pointer", touchAction: "manipulation",
+          }}>{isPaused ? "Resume" : "Start"}</button>
         )}
         {running && (
           <>
-            <button onClick={pause} style={{ background: t.inputBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>Pause</button>
-            <button onClick={stop} aria-label="Reset rest timer" style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
+            <button onClick={pause} style={{
+              background: "rgba(255,255,255,0.06)", color: t.text,
+              border: "1px solid rgba(255,255,255,0.10)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700,
+              cursor: "pointer", touchAction: "manipulation",
+            }}>Pause</button>
+            <button onClick={stop} aria-label="Reset rest timer" style={{
+              background: "transparent", color: t.textMuted,
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10, padding: "8px 10px", fontSize: 12, fontWeight: 600,
+              cursor: "pointer", touchAction: "manipulation",
+            }}>Reset</button>
           </>
         )}
         {!running && isPaused && (
-          <button onClick={stop} aria-label="Reset rest timer" style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
+          <button onClick={stop} aria-label="Reset rest timer" style={{
+            background: "transparent", color: t.textMuted,
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 10, padding: "8px 10px", fontSize: 12, fontWeight: 600,
+            cursor: "pointer", touchAction: "manipulation",
+          }}>Reset</button>
         )}
         {done && (
-          <button onClick={stop} style={{ background: "transparent", color: t.textMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", touchAction: "manipulation" }}>Reset</button>
+          <button onClick={stop} style={{
+            background: "transparent", color: t.textMuted,
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 600,
+            cursor: "pointer", touchAction: "manipulation",
+          }}>Reset</button>
         )}
         <button onClick={() => setExpanded(true)} aria-label="Expand rest timer" style={{ background: "transparent", border: "none", color: t.textMuted, cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name="chevronDown" size={14} />
@@ -2159,15 +2212,14 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     : rpe >= 8.5 ? "#ff9500"
     : "#5bb85b";
 
-  // Fix #97 (visual polish): row-wide tint when type is warmup or dropset so the
-  // whole set reads at a glance, not just the leftmost W/D pill. Warmup gets a
-  // softer amber wash; dropset gets a more saturated orange (because drop sets
-  // ARE training stimulus, just at reduced load — they deserve the visual weight).
-  // Working sets keep `t.surfaceHigh` so they look identical to pre-#97.
+  // Fix #97 (Apple polish): row tint is now a horizontal gradient that fades to
+  // transparent. The colored signal sits on the left (next to the W/D pill) and
+  // doesn't fight the inputs/RPE chip on the right. Working sets get the flat
+  // surfaceHigh — unchanged. Warmup gradient ~6% → 0%; dropset ~10% → 0%.
   const rowBg = setType === "warmup"
-    ? `${typeColor}10`
+    ? `linear-gradient(to right, ${typeColor}19 0%, ${typeColor}05 35%, ${t.surfaceHigh} 100%)`
     : setType === "dropset"
-      ? `${typeColor}18`
+      ? `linear-gradient(to right, ${typeColor}26 0%, ${typeColor}0a 40%, ${t.surfaceHigh} 100%)`
       : t.surfaceHigh;
   return (
     <div style={{ marginBottom: 8 }}>
@@ -2185,10 +2237,14 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
             onTouchEnd={e => e.stopPropagation()}
             aria-label={`Set ${index + 1} type: ${setType}. Tap to change.`}
             style={{
-              width: 24, height: 24, padding: 0,
+              // Apple opacity recipe: ${color}1f fill + ${color}66 border + 1px white
+              // inner highlight on the top edge to catch light. Working set stays
+              // chromeless (just the muted number) so it reads as default.
+              width: 28, height: 28, padding: 0,
               background: setType === "working" ? "transparent" : `${typeColor}1f`,
               border: setType === "working" ? "none" : `1px solid ${typeColor}66`,
-              borderRadius: 6,
+              boxShadow: setType === "working" ? "none" : "inset 0 1px 0 rgba(255,255,255,0.08)",
+              borderRadius: 8,
               color: typeColor,
               fontSize: 13,
               fontWeight: setType === "working" ? 400 : 800,
@@ -2197,44 +2253,59 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
               flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
               touchAction: "manipulation",
-              transition: "background 0.15s, border-color 0.15s, color 0.15s",
+              transition: "background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s",
             }}
           >{typeLabel}</button>
           <input type="number" inputMode="decimal" enterKeyHint="next" placeholder="lbs" value={set.weight} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, weight: e.target.value })} style={S.inputStyle({ width: 72, padding: "11px 10px" })} />
           <span style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }}>×</span>
           <input type="number" inputMode="numeric" enterKeyHint="done" placeholder="reps" value={set.reps} onFocus={e => { e.target.select(); handleFirstFocus(); }} onChange={e => onChange({ ...set, reps: e.target.value })} style={S.inputStyle({ width: 60, padding: "11px 10px" })} />
-          {/* RPE chip */}
+          {/* RPE chip — Apple polish: opacity recipe, no chevron, tone-colored text.
+              When empty: ghost — `RPE` in muted, near-invisible border. When set:
+              tone-tinted bg + top inner highlight + bold tone-colored value. The
+              tap-to-expand behavior is unchanged; the chevron arrow was visual noise
+              for a state that's already obvious from the value being there. */}
           <button
             onClick={() => { setShowRpe(v => !v); haptic(8); }}
             style={{
-              background: hasChip ? `${toneColor}18` : "transparent",
-              border: `1px solid ${hasChip ? toneColor + "66" : t.border}`,
-              borderRadius: 8, padding: "10px 10px", fontSize: 12, fontWeight: 700,
-              color: hasChip ? toneColor : t.textMuted, cursor: "pointer",
+              background: hasChip ? `${toneColor}1f` : "rgba(255,255,255,0.04)",
+              border: `1px solid ${hasChip ? `${toneColor}66` : "rgba(255,255,255,0.08)"}`,
+              boxShadow: hasChip ? "inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 12, fontWeight: 700,
+              color: hasChip ? toneColor : t.textMuted,
+              cursor: "pointer",
               whiteSpace: "nowrap", flexShrink: 0, minHeight: 44, touchAction: "manipulation",
-              transition: "all 0.15s",
+              transition: "background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s",
               display: "inline-flex", alignItems: "center", gap: 4,
+              letterSpacing: 0.3,
             }}
           >
-            <span>{chipLabel}</span>
-            <span style={{ display: "inline-flex", transition: "transform 0.2s", transform: showRpe ? "rotate(180deg)" : "rotate(0deg)", opacity: 0.7 }}>
-              <Icon name="chevronDown" size={11} />
-            </span>
+            {chipLabel}
           </button>
           <button
             onClick={toggleDone}
             aria-label={set.done ? "Mark set incomplete" : "Mark set complete"}
             aria-pressed={!!set.done}
             style={{
-              background: set.done ? "#5bb85b" : "transparent",
-              border: `1.5px solid ${set.done ? "#5bb85b" : t.border}`,
+              // Apple polish: opacity recipe for the empty state; full-gradient + top
+              // inner highlight + soft green glow when marked done.
+              background: set.done
+                ? "linear-gradient(135deg, #5bb85b, #3a8a3a)"
+                : "rgba(255,255,255,0.04)",
+              border: set.done
+                ? "1px solid rgba(91,184,91,0.7)"
+                : "1px solid rgba(255,255,255,0.08)",
+              boxShadow: set.done
+                ? "inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(91,184,91,0.22)"
+                : "none",
               color: set.done ? "#fff" : t.textMuted,
               cursor: "pointer",
               width: 32, height: 32, minWidth: 32, padding: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: 8, flexShrink: 0, marginLeft: "auto",
+              borderRadius: 10, flexShrink: 0, marginLeft: "auto",
               touchAction: "manipulation",
-              transition: "background 0.15s, border-color 0.15s, color 0.15s",
+              transition: "background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s",
             }}
           >
             <Icon name="check" size={14} />
@@ -2454,13 +2525,17 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
 
   const coach = coachFor(exercise.name, workouts);
 
+  // Apple polish: Coach cards now share the Steel Blue brand voice — the tone
+  // label ("Welcome Back", "Push It", etc.) carries the semantic, the colors
+  // stay cohesive. No more competing orange/red cards fighting the brand.
+  // Single recipe: bg `${accent}12`, border `${accent}44`, icon `accent`.
   const coachColors = {
-    intro:        { bg: `${accent}12`,       border: `${accent}44`,       icon: accent,     label: "First Lift" },
-    comeback:     { bg: "rgba(255,149,0,.1)", border: "rgba(255,149,0,.4)", icon: "#ff9500", label: "Welcome Back" },
-    recover:      { bg: "rgba(213,91,91,.1)", border: "rgba(213,91,91,.4)", icon: "#d55b5b", label: "Recover" },
-    push:         { bg: "rgba(91,184,91,.1)", border: "rgba(91,184,91,.4)", icon: "#5bb85b", label: "Push It" },
-    breakthrough: { bg: "rgba(255,149,0,.1)", border: "rgba(255,149,0,.4)", icon: "#ff9500", label: "Break Through" },
-    progress:     { bg: `${accent}12`,       border: `${accent}44`,       icon: accent,     label: "Next Target" },
+    intro:        { bg: `${accent}12`, border: `${accent}44`, icon: accent, label: "First Lift" },
+    comeback:     { bg: `${accent}12`, border: `${accent}44`, icon: accent, label: "Welcome Back" },
+    recover:      { bg: `${accent}12`, border: `${accent}44`, icon: accent, label: "Recover" },
+    push:         { bg: `${accent}12`, border: `${accent}44`, icon: accent, label: "Push It" },
+    breakthrough: { bg: `${accent}12`, border: `${accent}44`, icon: accent, label: "Break Through" },
+    progress:     { bg: `${accent}12`, border: `${accent}44`, icon: accent, label: "Next Target" },
   };
   const cc = coach ? coachColors[coach.tone] || coachColors.progress : null;
 
@@ -2475,11 +2550,12 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
         <button onClick={onRemove} style={S.iconBtn("#ff5b5b")}><Icon name="trash" size={15} /></button>
       </div>
 
-      {/* Coach card */}
+      {/* Coach card — Apple polish: opacity recipe with inset top highlight for depth */}
       {coach && !coachDismissed && (
         <div style={{
-          background: cc.bg, border: `1px solid ${cc.border}`, borderRadius: 12,
-          padding: "11px 14px", marginBottom: 14, display: "flex", alignItems: "flex-start", gap: 10,
+          background: cc.bg, border: `1px solid ${cc.border}`, borderRadius: 14,
+          padding: "13px 16px", marginBottom: 14, display: "flex", alignItems: "flex-start", gap: 11,
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
         }}>
           <div style={{ color: cc.icon, flexShrink: 0, marginTop: 1 }}><Icon name="zap" size={15} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -2491,22 +2567,34 @@ function ExerciseBlock({ exercise, onChange, onRemove, workouts, effortMetric, a
               <div style={{ marginTop: 7, display: "flex", gap: 6 }}>
                 <button
                   onClick={() => {
+                    // Apply the Coach suggestion. Fix #218 + #97: stamp id + type on
+                    // any set we create or fill so the new set joins the React tree
+                    // with stable identity and explicit working-set semantics.
                     if (!exercise.sets.some(s => !s.weight && !s.reps)) {
-                      onChange({ ...exercise, sets: [...exercise.sets, { weight: String(coach.target.weight), reps: String(coach.target.reps) }] });
+                      onChange({ ...exercise, sets: [...exercise.sets, { id: makeId(), type: "working", weight: String(coach.target.weight), reps: String(coach.target.reps) }] });
                     } else {
-                      const sets = exercise.sets.map(s => (!s.weight && !s.reps) ? { ...s, weight: String(coach.target.weight), reps: String(coach.target.reps) } : s);
+                      const sets = exercise.sets.map(s => (!s.weight && !s.reps)
+                        ? { ...s, id: s.id || makeId(), type: isValidSetType(s.type) ? s.type : "working", weight: String(coach.target.weight), reps: String(coach.target.reps) }
+                        : s);
                       onChange({ ...exercise, sets });
                     }
                     setCoachDismissed(true);
                     haptic([10, 30, 10]);
                   }}
                   style={{
-                    background: cc.icon, color: "#fff", border: "none", borderRadius: 8,
-                    padding: "11px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation", minHeight: 44,
+                    // Apple polish: Steel Blue gradient + soft glow, matches solidBtn / Add Exercise.
+                    background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "11px 16px", fontSize: 13, fontWeight: 700,
+                    cursor: "pointer", touchAction: "manipulation", minHeight: 44,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 12px ${accentGlow}`,
                   }}
                 >Apply {coach.target.weight} × {coach.target.reps}</button>
                 <button onClick={() => setCoachDismissed(true)}
-                  style={{ background: "transparent", border: `1px solid ${t.border}`, borderRadius: 8, padding: "11px 14px", fontSize: 13, color: t.textMuted, cursor: "pointer", touchAction: "manipulation", minHeight: 44 }}>
+                  // Apple polish: ghost button — text-only with subtle press background.
+                  style={{ background: "transparent", border: "none", borderRadius: 10, padding: "11px 14px", fontSize: 13, color: t.textMuted, cursor: "pointer", touchAction: "manipulation", minHeight: 44, fontWeight: 600 }}>
                   Dismiss
                 </button>
               </div>
@@ -2767,7 +2855,18 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
                 </button>
               )}
               {onSaveTemplate && (
-                <button onClick={() => onSaveTemplate(workout)} style={{ width: "100%", background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 10, color: t.textMuted, padding: "9px 0", fontSize: 12, fontWeight: 600, cursor: "pointer", marginTop: 4, touchAction: "manipulation" }}>
+                <button onClick={() => onSaveTemplate(workout)} style={{
+                  // Apple polish ghost: translucent fill, hairline border, no dashes.
+                  width: "100%",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                  borderRadius: 10,
+                  color: t.textMuted,
+                  padding: "10px 0", fontSize: 12, fontWeight: 600, letterSpacing: 0.2,
+                  cursor: "pointer", marginTop: 4, touchAction: "manipulation",
+                  transition: "background 0.18s, border-color 0.18s",
+                }}>
                   ＋ Save as Template
                 </button>
               )}
@@ -5373,6 +5472,14 @@ export default function App() {
       input, textarea { -webkit-user-select: auto !important; user-select: auto !important; }
       button { -webkit-user-select: none; user-select: none; }
       button:active { transform: scale(0.96); }
+      /* Apple-tier polish: inputs lift on focus with a Steel Blue accent ring
+         instead of a hard color border. Inline styles can't express :focus,
+         so the focus polish lives here as a global rule. The transparent box-
+         shadow doubles as the "ring" — softer than a thick border. */
+      input:focus, textarea:focus, select:focus {
+        border-color: rgba(91, 155, 213, 0.55) !important;
+        box-shadow: 0 0 0 3px rgba(91, 155, 213, 0.14);
+      }
       @keyframes bl-slide-r { from { opacity:0; transform:translateX(22px); } to { opacity:1; transform:translateX(0); } }
       @keyframes bl-slide-l { from { opacity:0; transform:translateX(-22px); } to { opacity:1; transform:translateX(0); } }
       @keyframes bl-card-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
@@ -6061,7 +6168,19 @@ export default function App() {
 
           {/* Save as Template — shown when workout has exercises and picker isn't focused */}
           {workout && workout.exercises.length > 0 && !showExPicker && (
-            <button onClick={() => setShowSaveTemplate(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 12, color: t.textMuted, padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 14, touchAction: "manipulation" }}>
+            <button onClick={() => setShowSaveTemplate(true)} style={{
+              // Apple polish: ghost translucent — no dashed border, very subtle bg.
+              width: "100%",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+              borderRadius: 12,
+              color: t.textMuted,
+              padding: "11px 16px", fontSize: 12, fontWeight: 600, letterSpacing: 0.2,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              marginBottom: 14, touchAction: "manipulation",
+              transition: "background 0.18s, border-color 0.18s",
+            }}>
               ＋ Save as Template
             </button>
           )}
@@ -7048,7 +7167,11 @@ export default function App() {
               letterSpacing: 1,
               cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: allDone ? "0 8px 32px rgba(91,184,91,0.35)" : "0 4px 18px rgba(91,184,91,0.2)",
+              // Apple polish: "lit from above" inner highlight catches light off the
+              // gradient. Outer glow scales with allDone state.
+              boxShadow: allDone
+                ? "inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 32px rgba(91,184,91,0.35)"
+                : "inset 0 1px 0 rgba(255,255,255,0.14), 0 4px 18px rgba(91,184,91,0.2)",
               transition: "padding 0.2s, font-size 0.2s, box-shadow 0.3s",
               touchAction: "manipulation",
             }}>
