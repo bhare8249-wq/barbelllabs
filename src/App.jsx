@@ -274,7 +274,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.7.3";
+const APP_VERSION = "2.7.4";
 const BUILD_DATE  = "2026-05-13";
 
 function useStorage(uid) {

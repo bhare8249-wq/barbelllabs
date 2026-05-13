@@ -243,7 +243,8 @@ These are mostly NOT Code's domain — they're business operations, legal, marke
 | 224 | ⏳ | Progress nav restructure (3-layer architecture, multi-pass) |
 | 225 | ⏳ | Premium polish initiative (10 phases, 2-3 month effort) |
 | 226 | 🔄 | **Workout data persistence — code shipped on `fix-batch-47`, awaiting real-device test (iPhone 12+/iOS 17+, Samsung) before merge.** Module: `src/workoutSession/`. Firestore offline persistence enabled. Capacitor `@capacitor/app` lifecycle wiring + 10s heartbeat. |
-| 227 | ⏳ | Migrate pre-commit version-bump hook to Husky so it travels with the repo. Currently lives only on Brian's laptop; desktop machine has no hook, so commits there don't bump version. |
+| 227 | ✅ | Husky pre-commit version-bump hook (`fix-batch-50`). Auto-installs on `npm install`. Auto-bumps patch + APP_VERSION + BUILD_DATE; skips if user manually bumped. |
+| 228 | ✅ | Apple-tier polish system app-wide (`fix-batch-49` + `fix-batch-50`). Unified opacity recipe, gestural set completion, bidirectional History swipe, haptic audit. |
 | 68  | ⏳ | (re-flagged) Sentry crash reporting — DSN needed before wiring. Will plug into the workoutSession layer's IDB-failure paths once installed. |
 
 ### #12 — Browse Starter Programs expansion
