@@ -274,7 +274,7 @@ const makeStyles = (t) => ({
 // v2.3.5  2026-04-18  Renamed all gymtrack references to barbelllabs across project
 // v2.4.0  2026-04-18  Weekly volume bar chart in Progress tab; bodyweight log + mini chart on Home tab
 // v2.4.1  2026-04-18  Bodyweight chart upgraded to full interactive progression chart; widget moved to Profile tab
-const APP_VERSION = "2.7.1";
+const APP_VERSION = "2.7.2";
 const BUILD_DATE  = "2026-05-13";
 
 function useStorage(uid) {
@@ -2226,14 +2226,16 @@ function SetRow({ set, index, onChange, onRemove, effortMetric = "rpe", onFirstF
     : rpe >= 8.5 ? "#ff9500"
     : "#5bb85b";
 
-  // Fix #97 (Apple polish): row tint is now a horizontal gradient that fades to
-  // transparent. The colored signal sits on the left (next to the W/D pill) and
-  // doesn't fight the inputs/RPE chip on the right. Working sets get the flat
-  // surfaceHigh — unchanged. Warmup gradient ~6% → 0%; dropset ~10% → 0%.
+  // Fix #97 (Brian feedback): full-row opacity tint, no gradient. The whole row
+  // says "this is a warmup" or "this is a drop set" at a glance. Amber = warmup,
+  // orange = drop set; the color IS the legend (paired with the W/D character).
+  // Working sets keep the flat surfaceHigh — no chrome, sleek default.
+  // Opacity tuned so the inputs / RPE chip remain readable on top of the tint.
   const rowBg = setType === "warmup"
-    ? `linear-gradient(to right, ${typeColor}19 0%, ${typeColor}05 35%, ${t.surfaceHigh} 100%)`
+    ? `${typeColor}1a`        // amber wash ~10%
     : setType === "dropset"
-      ? `linear-gradient(to right, ${typeColor}26 0%, ${typeColor}0a 40%, ${t.surfaceHigh} 100%)`
+      ? `${typeColor}24`      // orange wash ~14% (a touch more saturated since
+                              // drop sets ARE training stimulus, not prep)
       : t.surfaceHigh;
 
   // #228 — Hold-to-confirm gesture. The user long-presses anywhere on the row
@@ -2967,12 +2969,13 @@ function WorkoutHistoryCard({ workout, index, onLabelChange, onDelete, onSaveTem
                   <div style={{ color: accent, fontSize: 13, fontWeight: 700, marginBottom: 5 }}>{ex.name}</div>
                   {/* Fix #97: history rows pick up the same W/D pill + row-wide
                       tint as the active log row, so a session's structure
-                      (warmup → working → drop) reads at a glance after the fact. */}
+                      (warmup → working → drop) reads at a glance after the fact.
+                      Flat opacity, no gradient — matches the active log row. */}
                   {ex.sets.map((s, k) => {
                     const setType = isValidSetType(s.type) ? s.type : "working";
                     const tColor = setType === "warmup" ? "#E8B547" : setType === "dropset" ? "#FF7849" : t.textMuted;
                     const indexLabel = setType === "warmup" ? "W" : setType === "dropset" ? "D" : `${k + 1}.`;
-                    const tint = setType === "warmup" ? `${tColor}10` : setType === "dropset" ? `${tColor}18` : "transparent";
+                    const tint = setType === "warmup" ? `${tColor}1a` : setType === "dropset" ? `${tColor}24` : "transparent";
                     return (
                       <div key={s.id || k} style={{
                         display: "flex",
@@ -4210,11 +4213,31 @@ function CookieBanner({ data, save }) {
     setDismissed(true);
   };
   return (
-    <div style={{ position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)", left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)", maxWidth: 400, zIndex: 2200, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}>
+    <div style={{
+      // Apple-tier cookie banner: frosted glass with backdrop blur.
+      position: "fixed",
+      bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
+      left: "50%", transform: "translateX(-50%)",
+      width: "calc(100% - 24px)", maxWidth: 400, zIndex: 2200,
+      background: "rgba(28,28,30,0.86)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      backdropFilter: "blur(20px) saturate(140%)",
+      WebkitBackdropFilter: "blur(20px) saturate(140%)",
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 40px rgba(0,0,0,0.5)",
+      borderRadius: 16, padding: "14px 16px",
+    }}>
       <div style={{ fontSize: 12, color: t.textSub, lineHeight: 1.55, marginBottom: 10 }}>
         We store workout data and a session cookie to keep you signed in. We don't sell your data or use third-party ad tracking. See the <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none", fontWeight: 600 }}>Privacy Policy</a> for details.
       </div>
-      <button onClick={accept} style={{ width: "100%", background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>
+      <button onClick={() => { haptic(8); accept(); }} style={{
+        width: "100%",
+        background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
+        color: "#fff", border: "none", borderRadius: 12,
+        padding: "11px 0", fontSize: 14, fontWeight: 700, letterSpacing: 1,
+        fontFamily: "'Bebas Neue', cursive",
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.16), 0 2px 12px ${accentGlow}`,
+        cursor: "pointer",
+      }}>
         GOT IT
       </button>
     </div>
@@ -4370,7 +4393,14 @@ function WarmupCalculator({ onClose, customPlates }) {
             <div style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Warm-Up Ladder</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
               {sets.map((s, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 14px" }}>
+                <div key={i} style={{
+                  // Apple-tier warmup ladder row: hairline + inset top highlight.
+                  display: "flex", alignItems: "center", gap: 12,
+                  background: t.surfaceHigh,
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+                  borderRadius: 12, padding: "12px 14px",
+                }}>
                   <div style={{ width: 36, textAlign: "center", fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: t.textMuted }}>{i + 1}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: accent, lineHeight: 1 }}>{s.weight} <span style={{ fontSize: 12, color: t.textMuted }}>{unit}</span> × {s.reps}</div>
@@ -4384,7 +4414,14 @@ function WarmupCalculator({ onClose, customPlates }) {
                   </div>
                 </div>
               ))}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, background: `${accent}12`, border: `1px solid ${accent}33`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{
+                // Apple-tier "working set" highlight row: Steel-Blue tint + inset highlight.
+                display: "flex", alignItems: "center", gap: 12,
+                background: `${accent}14`,
+                border: `1px solid ${accent}33`,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                borderRadius: 12, padding: "12px 14px",
+              }}>
                 <div style={{ width: 36, textAlign: "center" }}><span style={{ fontSize: 18 }}>🏋️</span></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: accent, lineHeight: 1 }}>{targetNum} <span style={{ fontSize: 12, color: t.textMuted }}>{unit}</span> × working</div>
@@ -4908,7 +4945,18 @@ function useCountUp(target, duration = 700) {
 function StatCard({ icon, color, label, value }) {
   const displayed = useCountUp(value);
   return (
-    <div style={{ background: "var(--bl-surface)", borderRadius: 18, padding: "20px 8px 16px", textAlign: "center", border: "1px solid var(--bl-border)", borderTop: `3px solid ${color}`, boxShadow: "0 4px 24px rgba(0,0,0,0.20)" }}>
+    <div style={{
+      // Apple-tier stat tile: hairline border + inset top highlight + soft color
+      // accent on the top edge (3px bar in the stat's color). Reads as iOS Health
+      // / Fitness tile language.
+      background: "var(--bl-surface)",
+      borderRadius: 18,
+      padding: "20px 8px 16px",
+      textAlign: "center",
+      border: "1px solid rgba(255,255,255,0.06)",
+      borderTop: `3px solid ${color}`,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 24px rgba(0,0,0,0.22)",
+    }}>
       <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
       <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 32, color, lineHeight: 1 }}>{displayed}</div>
       <div style={{ fontSize: 10, color: "var(--bl-muted)", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</div>
@@ -4947,21 +4995,51 @@ function OnboardingTour({ onDone }) {
   const s = ONBOARDING_STEPS[step];
   const isLast = step === ONBOARDING_STEPS.length - 1;
   return (
-    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 2500, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px" }}>
-      <div style={{ width: "100%", maxWidth: 360, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 20, padding: "28px 24px", textAlign: "center", boxShadow: "0 12px 48px rgba(0,0,0,0.6)" }}>
+    <div data-hswipe-safe style={{ position: "fixed", inset: 0, zIndex: 2500, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 20px" }}>
+      <div style={{
+        // Apple-tier onboarding card: hairline + inset top highlight + soft shadow.
+        width: "100%", maxWidth: 360,
+        background: t.surface,
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 20px 60px rgba(0,0,0,0.6)",
+        borderRadius: 22, padding: "30px 24px", textAlign: "center",
+      }}>
         <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 14 }}>{s.emoji}</div>
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 1.5, color: t.text, marginBottom: 10 }}>{s.title}</div>
         <div style={{ color: t.textSub, fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>{s.body}</div>
         <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 20 }}>
           {ONBOARDING_STEPS.map((_, i) => (
-            <span key={i} style={{ width: i === step ? 22 : 7, height: 7, borderRadius: 4, background: i === step ? accent : t.border, transition: "all 0.2s" }} />
+            <span key={i} style={{
+              // Apple-tier page indicators: longer pill for active, subtle dots for inactive.
+              width: i === step ? 22 : 7, height: 7, borderRadius: 4,
+              background: i === step ? accent : "rgba(255,255,255,0.18)",
+              transition: "all 0.25s",
+            }} />
           ))}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onDone} style={{ flex: 1, background: "transparent", border: `1px solid ${t.border}`, color: t.textMuted, borderRadius: 12, padding: "12px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" }}>
+          <button onClick={() => { haptic(8); onDone(); }} style={{
+            // Ghost button — translucent + hairline border, no dashes.
+            flex: 1,
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+            color: t.textMuted, borderRadius: 12,
+            padding: "12px 0", fontSize: 13, fontWeight: 600, letterSpacing: 0.3,
+            cursor: "pointer", touchAction: "manipulation",
+          }}>
             {isLast ? "Close" : "Skip"}
           </button>
-          <button onClick={() => isLast ? onDone() : setStep(step + 1)} style={{ flex: 2, background: `linear-gradient(135deg, ${accent}, #4A8BC4)`, border: "none", color: "#fff", borderRadius: 12, padding: "12px 0", fontSize: 15, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1, cursor: "pointer", touchAction: "manipulation" }}>
+          <button onClick={() => { haptic(8); isLast ? onDone() : setStep(step + 1); }} style={{
+            // Steel-Blue primary with inset highlight + soft glow.
+            flex: 2,
+            background: `linear-gradient(135deg, ${accent}, #4A8BC4)`,
+            border: "none", color: "#fff",
+            borderRadius: 12, padding: "12px 0",
+            fontSize: 15, fontWeight: 700, fontFamily: "'Bebas Neue', cursive", letterSpacing: 1,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), 0 4px 16px ${accentGlow}`,
+            cursor: "pointer", touchAction: "manipulation",
+          }}>
             {isLast ? "LET'S GO" : "NEXT"}
           </button>
         </div>
@@ -6282,7 +6360,18 @@ export default function App() {
                 {displayName} <span style={{ color: accent }}>💪</span>
               </div>
               <div style={{ color: t.textMuted, fontSize: 12, marginTop: 5 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
-              {streak > 0 && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,149,0,0.12)", border: "1px solid rgba(255,149,0,0.3)", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#ff9500", fontWeight: 700, marginTop: 8 }}>🔥 {streak} day streak</div>}
+              {streak > 0 && (
+                <div style={{
+                  // Apple-tier streak chip: warm flame tint with opacity recipe.
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  background: "rgba(255,149,0,0.14)",
+                  border: "1px solid rgba(255,149,0,0.32)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                  borderRadius: 20, padding: "5px 13px",
+                  fontSize: 12, color: "#ff9500", fontWeight: 700, letterSpacing: 0.3,
+                  marginTop: 10,
+                }}>🔥 {streak} day streak</div>
+              )}
             </div>
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
@@ -6299,7 +6388,15 @@ export default function App() {
                   const labelCfgs = labels.map(id => WORKOUT_LABELS.find(l => l.id === id)).filter(Boolean);
                   return (
                     <div key={i} style={{ ...S.card(), display: "flex", alignItems: "center", gap: 14, padding: "15px 18px", animation: "bl-card-in 0.3s ease both", animationDelay: `${i * 60}ms` }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: labelCfgs[0] ? labelCfgs[0].bg : `${accent}15`, border: `1px solid ${labelCfgs[0] ? labelCfgs[0].border : accent + "30"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                      <div style={{
+                        // Apple-tier emoji tile: tinted bg + inset top highlight, slightly
+                        // raised feel — like an iOS app icon.
+                        width: 44, height: 44, borderRadius: 13,
+                        background: labelCfgs[0] ? labelCfgs[0].bg : `${accent}18`,
+                        border: `1px solid ${labelCfgs[0] ? labelCfgs[0].border : accent + "33"}`,
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0,
+                      }}>
                         {labelCfgs[0] ? labelCfgs[0].emoji : "🏋️"}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -6863,7 +6960,14 @@ export default function App() {
                     { icon: "👑", text: "Automatic PR detection" },
                     { icon: "🤖", text: "AI coaching after every session" },
                   ].map(f => (
-                    <div key={f.text} style={{ display: "flex", alignItems: "center", gap: 12, background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 16px" }}>
+                    <div key={f.text} style={{
+                      // Apple-tier feature row: hairline border + inset top highlight, lifted feel.
+                      display: "flex", alignItems: "center", gap: 12,
+                      background: t.surfaceHigh,
+                      border: "1px solid rgba(255,255,255,0.06)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+                      borderRadius: 12, padding: "12px 16px",
+                    }}>
                       <span style={{ fontSize: 20 }}>{f.icon}</span>
                       <span style={{ fontSize: 13, color: t.textSub }}>{f.text}</span>
                     </div>
